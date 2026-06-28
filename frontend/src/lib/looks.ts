@@ -4,6 +4,9 @@
 
 type RGB = [number, number, number];
 
+// Character sheet frame size (set by tools/process-sprites.mjs — keep in sync).
+export const FRAME = { w: 410, h: 326 };
+
 export const SKIN: Record<string, RGB | null> = {
   default: null,
   light: [238, 194, 158],

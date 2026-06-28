@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
 import type { MvMap } from '../lib/mvMap';
 import type { Interactable, Zone } from '../store';
-import { recolorSheet, lookKey, type Look } from '../lib/looks';
+import { recolorSheet, lookKey, FRAME, type Look } from '../lib/looks';
 
 const TILE = 48;
 // Character sheets are MV "$" single-character sheets: 3 cols x 4 rows.
-const CHAR_W = 427;
-const CHAR_H = 320;
-const DISPLAY_H = 100;
+const CHAR_W = FRAME.w;
+const CHAR_H = FRAME.h;
+const DISPLAY_H = 62; // ~1.3 tiles tall
 const DIRS = ['down', 'left', 'right', 'up'] as const;
 type Dir = (typeof DIRS)[number];
 const DIR_ROW: Record<Dir, number> = { down: 0, left: 1, right: 2, up: 3 };
@@ -131,10 +131,10 @@ export class WorldScene extends Phaser.Scene {
     let p = this.players.get(s.userId);
     const texKey = this.lookTexture(sheetFor(s.avatar), s.look ?? DEFAULT_LOOK);
     if (!p) {
-      const sprite = this.add.sprite(0, 0, texKey, frameAt('down', 1)).setOrigin(0.5, 0.82);
+      const sprite = this.add.sprite(0, 0, texKey, frameAt('down', 1)).setOrigin(0.5, 0.95);
       sprite.setDisplaySize((DISPLAY_H * CHAR_W) / CHAR_H, DISPLAY_H);
       const label = this.add
-        .text(0, -52, s.username, { fontSize: '12px', color: '#fff', stroke: '#000', strokeThickness: 4 })
+        .text(0, -66, s.username, { fontSize: '12px', color: '#fff', stroke: '#000', strokeThickness: 4 })
         .setOrigin(0.5);
       const container = this.add.container(s.x * TILE + TILE / 2, s.y * TILE + TILE / 2, [sprite, label]);
       container.setDepth(10);
@@ -177,7 +177,7 @@ export class WorldScene extends Phaser.Scene {
     const text = this.add
       .text(0, 0, body, { fontSize: '12px', color: '#111', backgroundColor: '#fff', padding: { x: 6, y: 4 }, wordWrap: { width: 160 } })
       .setOrigin(0.5, 1);
-    const bubble = this.add.container(0, -62, [text]);
+    const bubble = this.add.container(0, -80, [text]);
     p.container.add(bubble);
     p.bubble = bubble;
     p.bubbleTimer = this.time.now + 5000;

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import './casino.css';
 import { api, type Profile } from '../lib/api';
-import { SKIN, HAIR, SUIT, SWATCH, recolorSheet, type Look } from '../lib/looks';
+import { SKIN, HAIR, SUIT, SWATCH, recolorSheet, FRAME, type Look } from '../lib/looks';
 
-const CHAR_W = 427, CHAR_H = 320;
+const CHAR_W = FRAME.w, CHAR_H = FRAME.h;
 const swatchCss = (rgb: [number, number, number]) => `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
 
 /** First-login profile setup: username, sex, and cosmetic recolor presets. */
@@ -61,7 +61,7 @@ export function ProfileSetup({ onDone }: { onDone: (p: Profile) => void }) {
 
         <div style={{ display: 'flex', gap: 18 }}>
           <div className="cz-felt" style={{ padding: 12, display: 'grid', placeItems: 'center' }}>
-            <canvas ref={canvasRef} width={150} height={112} style={{ imageRendering: 'pixelated' }} />
+            <canvas ref={canvasRef} width={150} height={119} style={{ imageRendering: 'pixelated' }} />
             <div className="cz-row" style={{ marginTop: 8, gap: 6 }}>
               {(['MALE', 'FEMALE'] as const).map((g) => (
                 <button key={g} className={g === gender ? 'cz-btn' : 'cz-btn cz-btn--dark'} style={{ padding: '6px 12px' }} onClick={() => setGender(g)}>
