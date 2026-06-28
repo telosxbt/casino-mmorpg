@@ -1,0 +1,296 @@
+// Casino MMORPG — Prisma schema
+// Server-authoritative. Frontend is never trusted; every balance, bet, and
+// outcome below is written only by backend code after verification.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────── Identity ─────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  walletAddress String  @unique // base58 Solana pubkey; canonical identity
+  username     String   @unique
+  avatar       String   @default("Actor1-0")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastSeenAt   DateTime @default(now())
+
+  // Off-chain ledger balance (in token base units, bigint as string-safe).
+  // Authoritative server-side balance; reconciled against on-chain deposits.
+  balance      BigInt   @default(0)
+
+  sessions      Session[]
+  wallet        Wallet?
+  transactions  Transaction[]
+  bets          Bet[]
+  rouletteBets  RouletteBet[]
+  blackjackHands BlackjackHand[]
+  slotSpins     SlotSpin[]
+  chatMessages  ChatMessage[]
+
+  @@index([walletAddress])
+}
+
+// Issued JWT/refresh sessions. Enables server-side invalidation.
+model Session {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String // sha256 of refresh token; never store raw
+  userAgent     String?
+  ip            String?
+  revokedAt     DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([refreshTokenHash])
+}
+
+// Wallet-bound metadata + nonce challenge for signature auth.
+model Wallet {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address       String   @unique
+  // Current signing challenge; consumed on successful verify.
+  authNonce     String?
+  authNonceExp  DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([address])
+}
+
+// ───────────────────────── Money ─────────────────────────
+
+enum TxType {
+  DEPOSIT     // on-chain transfer in -> credit ledger
+  WITHDRAW    // ledger debit -> on-chain payout out
+  BET_DEBIT   // stake removed from ledger when bet placed
+  BET_CREDIT  // winnings added to ledger on settlement
+  ADJUST      // manual/ops correction
+}
+
+enum TxStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+// Every balance mutation is a row here. On-chain txs carry a signature.
+model Transaction {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          TxType
+  status        TxStatus @default(PENDING)
+  amount        BigInt   // token base units; positive
+  // On-chain Solana tx signature for DEPOSIT/WITHDRAW; unique => replay-proof.
+  onchainSig    String?  @unique
+  // Idempotency key so retries/double-submits collapse to one effect.
+  idempotencyKey String? @unique
+  meta          Json?
+  betId         String?
+  createdAt     DateTime @default(now())
+  confirmedAt   DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ───────────────────────── Betting ─────────────────────────
+
+enum GameType {
+  ROULETTE
+  BLACKJACK
+  SLOTS
+}
+
+enum BetStatus {
+  PLACED    // stake locked
+  WON
+  LOST
+  PUSH      // refund (e.g. blackjack push)
+  REFUNDED  // game cancelled
+}
+
+// Generic bet record; game-specific detail lives in the per-game tables.
+model Bet {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameType    GameType
+  amount      BigInt
+  payout      BigInt    @default(0)
+  status      BetStatus @default(PLACED)
+  // FK to the specific game round (roulette/blackjack/slot row id).
+  gameRoundId String?
+  createdAt   DateTime  @default(now())
+  settledAt   DateTime?
+
+  @@index([userId])
+  @@index([gameType, gameRoundId])
+}
+
+// ───────────────────── Provably-fair commitments ─────────────────────
+// Reused by every game: commit hash published before play, seed revealed after.
+
+model FairnessRound {
+  id            String   @id @default(uuid())
+  gameType      GameType
+  serverSeed    String   // kept secret until reveal
+  serverSeedHash String  // sha256(serverSeed), published up-front
+  clientSeed    String?  // optional player/aggregate contribution
+  nonce         Int      @default(0)
+  revealedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([gameType])
+  @@index([serverSeedHash])
+}
+
+// ───────────────────────── Roulette ─────────────────────────
+
+enum RoundPhase {
+  BETTING
+  SPINNING
+  SETTLED
+}
+
+model RouletteGame {
+  id            String   @id @default(uuid())
+  tableId       String   // logical table on the map / socket room
+  phase         RoundPhase @default(BETTING)
+  fairnessId    String?
+  resultNumber  Int?     // 0..36
+  resultColor   String?  // red|black|green
+  bettingEndsAt DateTime?
+  createdAt     DateTime @default(now())
+  settledAt     DateTime?
+
+  bets          RouletteBet[]
+
+  @@index([tableId])
+  @@index([phase])
+}
+
+model RouletteBet {
+  id        String   @id @default(uuid())
+  gameId    String
+  game      RouletteGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // straight | split | red | black | even | odd | low | high | dozen | column ...
+  betType   String
+  selection Json     // numbers covered / parameters
+  amount    BigInt
+  payout    BigInt   @default(0)
+  won       Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([gameId])
+  @@index([userId])
+}
+
+// ───────────────────────── Blackjack ─────────────────────────
+
+enum BjState {
+  WAITING    // seating / betting
+  DEALING
+  PLAYER_TURNS
+  DEALER_TURN
+  SETTLED
+}
+
+model BlackjackGame {
+  id          String   @id @default(uuid())
+  tableId     String
+  state       BjState  @default(WAITING)
+  fairnessId  String?
+  // Shoe + dealer hand are server-only until settle.
+  dealerHand  Json?
+  shoe        Json?    // remaining shuffled cards (server secret during play)
+  turnIndex   Int      @default(0)
+  turnEndsAt  DateTime?
+  createdAt   DateTime @default(now())
+  settledAt   DateTime?
+
+  hands       BlackjackHand[]
+
+  @@index([tableId])
+  @@index([state])
+}
+
+enum HandResult {
+  PENDING
+  WIN
+  LOSE
+  PUSH
+  BLACKJACK
+  BUST
+  SURRENDER
+}
+
+model BlackjackHand {
+  id        String   @id @default(uuid())
+  gameId    String
+  game      BlackjackGame @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seat      Int
+  cards     Json     @default("[]")
+  bet       BigInt
+  payout    BigInt   @default(0)
+  result    HandResult @default(PENDING)
+  isStanding Boolean @default(false)
+  isDoubled Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([gameId])
+  @@index([userId])
+}
+
+// ───────────────────────── Slots ─────────────────────────
+
+model SlotSpin {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  machineId   String
+  fairnessId  String?
+  bet         BigInt
+  // Resulting symbol grid, e.g. [[..],[..],[..]]
+  result      Json
+  payout      BigInt   @default(0)
+  multiplier  Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([machineId])
+}
+
+// ───────────────────────── Chat ─────────────────────────
+
+enum ChatScope {
+  GLOBAL
+  NEARBY
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope     ChatScope @default(GLOBAL)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([scope, createdAt])
+  @@index([userId])
+}
