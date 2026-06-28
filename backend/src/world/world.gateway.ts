@@ -67,7 +67,11 @@ export class WorldGateway
     const dbUser = await this.prisma.user.findUnique({ where: { id: user.sub } });
     if (!dbUser) return socket.disconnect();
 
-    const state = this.world.spawn(dbUser.id, dbUser.username, dbUser.avatar);
+    const state = this.world.spawn(dbUser.id, dbUser.username, dbUser.avatar, {
+      skin: dbUser.skinTone,
+      hair: dbUser.hairColor,
+      suit: dbUser.suitColor,
+    });
     socket.data.userId = dbUser.id;
     await socket.join('world');
 
@@ -131,6 +135,7 @@ export class WorldGateway
       userId: p.userId,
       username: p.username,
       avatar: p.avatar,
+      look: p.look,
       x: p.x,
       y: p.y,
       dir: p.dir,

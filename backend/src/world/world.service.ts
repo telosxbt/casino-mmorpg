@@ -1,10 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { MapService } from './map.service';
 
+export interface Look {
+  skin: string;
+  hair: string;
+  suit: string;
+}
+
 export interface PlayerState {
   userId: string;
   username: string;
   avatar: string;
+  look: Look;
   // Fractional tile position (server-authoritative).
   x: number;
   y: number;
@@ -32,11 +39,12 @@ export class WorldService {
 
   constructor(private readonly map: MapService) {}
 
-  spawn(userId: string, username: string, avatar: string): PlayerState {
+  spawn(userId: string, username: string, avatar: string, look: Look): PlayerState {
     const p: PlayerState = {
       userId,
       username,
       avatar,
+      look,
       x: this.map.spawn.x,
       y: this.map.spawn.y,
       dir: 'down',

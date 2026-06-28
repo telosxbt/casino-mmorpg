@@ -1,17 +1,18 @@
 import Phaser from 'phaser';
 import type { MvMap } from '../lib/mvMap';
 import type { Interactable, Zone } from '../store';
+import { recolorSheet, lookKey, type Look } from '../lib/looks';
 
 const TILE = 48;
 // Character sheets are MV "$" single-character sheets: 3 cols x 4 rows.
 const CHAR_W = 427;
 const CHAR_H = 320;
-const DISPLAY_H = 100; // on-screen sprite height (px); width scales with aspect
-const SHEETS = ['male', 'female'] as const;
-type Sheet = (typeof SHEETS)[number];
+const DISPLAY_H = 100;
 const DIRS = ['down', 'left', 'right', 'up'] as const;
 type Dir = (typeof DIRS)[number];
 const DIR_ROW: Record<Dir, number> = { down: 0, left: 1, right: 2, up: 3 };
+const WALK_CYCLE = [0, 1, 2, 1];
+const DEFAULT_LOOK: Look = { skin: 'default', hair: 'default', suit: 'default' };
 
 export interface WorldSceneData {
   mvMap: MvMap;
@@ -31,27 +32,27 @@ interface PlayerObj {
   label: Phaser.GameObjects.Text;
   bubble?: Phaser.GameObjects.Container;
   bubbleTimer?: number;
-  sheet: Sheet;
+  texKey: string;
   tx: number;
   ty: number;
   dir: Dir;
   moving: boolean;
-  animKey?: string;
 }
 
-const idleFrame = (dir: Dir) => DIR_ROW[dir] * 3 + 1;
-const sheetFor = (avatar?: string): Sheet => (avatar === 'female' ? 'female' : 'male');
+const frameAt = (dir: Dir, col: number) => DIR_ROW[dir] * 3 + col;
+const sheetFor = (avatar?: string) => (avatar === 'female' ? 'female' : 'male');
 
 /**
- * Renders the casino: baked MV map, interaction zones, and animated players
- * (gendered tuxedo / red-dress sprites). Movement is server-authoritative — we
- * lerp sprites toward broadcast positions and play the matching walk cycle.
+ * Renders the casino + animated players. Each player's sprite is recoloured at
+ * load time from their chosen presets (skin/hair/suit) into a cached texture,
+ * then walk-animated by stepping frames. Movement is server-authoritative.
  */
 export class WorldScene extends Phaser.Scene {
   private cfg!: WorldSceneData;
   private players = new Map<string, PlayerObj>();
   private lastNearId: string | null = null;
   private lastZoneId: string | null = null;
+  private walkIdx = 0;
 
   constructor() {
     super('World');
@@ -71,19 +72,6 @@ export class WorldScene extends Phaser.Scene {
     this.textures.addCanvas('mapBase', mvMap.base);
     this.textures.addCanvas('mapOver', mvMap.over);
     this.add.image(0, 0, 'mapBase').setOrigin(0).setDepth(0);
-
-    // Walk animations: per sheet, per direction (frames col 0,1,2,1).
-    for (const sheet of SHEETS) {
-      for (const dir of DIRS) {
-        const r = DIR_ROW[dir] * 3;
-        this.anims.create({
-          key: `${sheet}-${dir}`,
-          frames: this.anims.generateFrameNumbers(sheet, { frames: [r, r + 1, r + 2, r + 1] }),
-          frameRate: 8,
-          repeat: -1,
-        });
-      }
-    }
 
     for (const o of interactables) {
       const px = o.x * TILE + TILE / 2;
@@ -119,27 +107,43 @@ export class WorldScene extends Phaser.Scene {
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
       this.cfg.onMoveTo({ x: Math.floor(wp.x / TILE), y: Math.floor(wp.y / TILE) });
     });
+
+    // Walk frame cadence (manual so it works across per-player recoloured textures).
+    this.time.addEvent({ delay: 150, loop: true, callback: () => (this.walkIdx = (this.walkIdx + 1) % WALK_CYCLE.length) });
+  }
+
+  /** Build (and cache) a recoloured spritesheet texture for a look. */
+  private lookTexture(sheet: string, look: Look): string {
+    if (look.skin === 'default' && look.hair === 'default' && look.suit === 'default') return sheet;
+    const key = lookKey(sheet, look);
+    if (this.textures.exists(key)) return key;
+    const src = this.textures.get(sheet).getSourceImage() as HTMLImageElement;
+    const canvas = recolorSheet(src as any, look);
+    this.textures.addCanvas(key, canvas);
+    const tex = this.textures.get(key);
+    for (let f = 0; f < 12; f++) tex.add(f, 0, (f % 3) * CHAR_W, Math.floor(f / 3) * CHAR_H, CHAR_W, CHAR_H);
+    return key;
   }
 
   // ── Player lifecycle ────────────────────────────────────────────────────────
 
-  upsertPlayer(s: { userId: string; username: string; x: number; y: number; dir?: string; avatar?: string }) {
+  upsertPlayer(s: { userId: string; username: string; x: number; y: number; dir?: string; avatar?: string; look?: Look }) {
     let p = this.players.get(s.userId);
+    const texKey = this.lookTexture(sheetFor(s.avatar), s.look ?? DEFAULT_LOOK);
     if (!p) {
-      const sheet = sheetFor(s.avatar);
-      const sprite = this.add.sprite(0, 0, sheet, idleFrame('down')).setOrigin(0.5, 0.82);
+      const sprite = this.add.sprite(0, 0, texKey, frameAt('down', 1)).setOrigin(0.5, 0.82);
       sprite.setDisplaySize((DISPLAY_H * CHAR_W) / CHAR_H, DISPLAY_H);
       const label = this.add
         .text(0, -52, s.username, { fontSize: '12px', color: '#fff', stroke: '#000', strokeThickness: 4 })
         .setOrigin(0.5);
       const container = this.add.container(s.x * TILE + TILE / 2, s.y * TILE + TILE / 2, [sprite, label]);
       container.setDepth(10);
-      p = { container, sprite, label, sheet, tx: s.x, ty: s.y, dir: 'down', moving: false };
+      p = { container, sprite, label, texKey, tx: s.x, ty: s.y, dir: 'down', moving: false };
       this.players.set(s.userId, p);
       if (s.userId === this.cfg.selfId) this.cameras.main.startFollow(container, true, 0.15, 0.15);
-    } else if (s.avatar && sheetFor(s.avatar) !== p.sheet) {
-      p.sheet = sheetFor(s.avatar);
-      p.sprite.setTexture(p.sheet, idleFrame(p.dir));
+    } else if (texKey !== p.texKey) {
+      p.texKey = texKey;
+      p.sprite.setTexture(texKey, frameAt(p.dir, 1));
     }
     p.tx = s.x;
     p.ty = s.y;
@@ -186,22 +190,9 @@ export class WorldScene extends Phaser.Scene {
       const targetY = p.ty * TILE + TILE / 2;
       p.container.x += (targetX - p.container.x) * lerp;
       p.container.y += (targetY - p.container.y) * lerp;
-      // Depth-sort so lower players draw in front.
       p.container.setDepth(10 + p.container.y / 1000);
-
-      const wantKey = p.moving ? `${p.sheet}-${p.dir}` : undefined;
-      if (wantKey) {
-        if (p.animKey !== wantKey) {
-          p.animKey = wantKey;
-          p.sprite.play(wantKey, true);
-        }
-      } else if (p.animKey) {
-        p.animKey = undefined;
-        p.sprite.stop();
-        p.sprite.setFrame(idleFrame(p.dir));
-      } else {
-        p.sprite.setFrame(idleFrame(p.dir));
-      }
+      const col = p.moving ? WALK_CYCLE[this.walkIdx] : 1;
+      p.sprite.setFrame(frameAt(p.dir, col));
 
       if (p.bubble && p.bubbleTimer && this.time.now > p.bubbleTimer) {
         p.bubble.destroy();

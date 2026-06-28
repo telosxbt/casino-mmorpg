@@ -38,7 +38,11 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   @Post('profile')
   async profile(@Req() req: any, @Body() dto: ProfileDto) {
-    return this.auth.setProfile(req.user.sub, dto.username, dto.gender);
+    return this.auth.setProfile(req.user.sub, dto.username, dto.gender, {
+      skinTone: dto.skinTone,
+      hairColor: dto.hairColor,
+      suitColor: dto.suitColor,
+    });
   }
 
   @UseGuards(AuthGuard('jwt'))

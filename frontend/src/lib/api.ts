@@ -52,12 +52,19 @@ export interface Profile {
   avatar: string;
   gender: 'MALE' | 'FEMALE' | null;
   profileComplete: boolean;
+  skinTone: string;
+  hairColor: string;
+  suitColor: string;
 }
 
 export const api = {
   me: () => authedFetch('/auth/me').then((r) => json<Profile>(r)),
-  setProfile: (username: string, gender: 'MALE' | 'FEMALE') =>
-    authedFetch('/auth/profile', { method: 'POST', body: JSON.stringify({ username, gender }) }).then((r) =>
+  setProfile: (
+    username: string,
+    gender: 'MALE' | 'FEMALE',
+    look?: { skinTone: string; hairColor: string; suitColor: string },
+  ) =>
+    authedFetch('/auth/profile', { method: 'POST', body: JSON.stringify({ username, gender, ...look }) }).then((r) =>
       json<Profile>(r),
     ),
   balance: () => authedFetch('/wallet/balance').then((r) => json<Balance>(r)),

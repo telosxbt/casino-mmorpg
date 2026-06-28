@@ -139,19 +139,31 @@ export class AuthService {
     return this.issueTokens({ sub: session.userId, wallet: session.user.walletAddress });
   }
 
+  private readonly profileSelect = {
+    username: true,
+    avatar: true,
+    gender: true,
+    profileComplete: true,
+    skinTone: true,
+    hairColor: true,
+    suitColor: true,
+  } as const;
+
   /** Current player profile — used to decide whether to show first-login setup. */
   async getProfile(userId: string) {
-    return this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { username: true, avatar: true, gender: true, profileComplete: true },
-    });
+    return this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: this.profileSelect });
   }
 
   /**
-   * First-login profile setup: choose a username + sex. The avatar sprite is
-   * derived from the chosen sex ('male'/'female'). Username must be unique.
+   * First-login profile setup: username + sex (sets avatar sprite) + optional
+   * cosmetic recolor presets (skin/hair/suit). Username must be unique.
    */
-  async setProfile(userId: string, username: string, gender: Gender) {
+  async setProfile(
+    userId: string,
+    username: string,
+    gender: Gender,
+    look: { skinTone?: string; hairColor?: string; suitColor?: string } = {},
+  ) {
     const taken = await this.prisma.user.findFirst({
       where: { username, NOT: { id: userId } },
       select: { id: true },
@@ -160,8 +172,16 @@ export class AuthService {
     const avatar = gender === 'FEMALE' ? 'female' : 'male';
     return this.prisma.user.update({
       where: { id: userId },
-      data: { username, gender, avatar, profileComplete: true },
-      select: { username: true, avatar: true, gender: true, profileComplete: true },
+      data: {
+        username,
+        gender,
+        avatar,
+        profileComplete: true,
+        skinTone: look.skinTone ?? 'default',
+        hairColor: look.hairColor ?? 'default',
+        suitColor: look.suitColor ?? 'default',
+      },
+      select: this.profileSelect,
     });
   }
 

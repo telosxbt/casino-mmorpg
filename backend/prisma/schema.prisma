@@ -26,6 +26,10 @@ model User {
   avatar       String   @default("male")
   gender       Gender?  // null until the player completes profile setup
   profileComplete Boolean @default(false)
+  // Cosmetic recolor preset keys (resolved to palettes client-side).
+  skinTone     String   @default("default")
+  hairColor    String   @default("default")
+  suitColor    String   @default("default")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   lastSeenAt   DateTime @default(now())

@@ -30,6 +30,11 @@ export class RefreshDto {
   refreshToken!: string;
 }
 
+// Allowed cosmetic preset keys — must match frontend src/lib/looks.ts.
+export const SKIN_KEYS = ['default', 'light', 'tan', 'brown', 'dark', 'pale'];
+export const HAIR_KEYS = ['default', 'black', 'blonde', 'red', 'gray', 'white', 'blue', 'pink'];
+export const SUIT_KEYS = ['default', 'blue', 'red', 'green', 'purple', 'white', 'gold', 'teal', 'burgundy', 'navy'];
+
 export class ProfileDto {
   @IsString()
   @Length(3, 20)
@@ -38,4 +43,16 @@ export class ProfileDto {
 
   @IsIn(['MALE', 'FEMALE'], { message: 'gender must be MALE or FEMALE' })
   gender!: 'MALE' | 'FEMALE';
+
+  @IsOptional()
+  @IsIn(SKIN_KEYS)
+  skinTone?: string;
+
+  @IsOptional()
+  @IsIn(HAIR_KEYS)
+  hairColor?: string;
+
+  @IsOptional()
+  @IsIn(SUIT_KEYS)
+  suitColor?: string;
 }
