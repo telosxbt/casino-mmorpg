@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { MvMap } from '../lib/mvMap';
 import type { Interactable, Zone } from '../store';
-import { recolorSheet, lookKey, FRAME, type Look } from '../lib/looks';
+import { FRAME } from '../lib/looks';
 
 const TILE = 48;
 // Character sheets are MV "$" single-character sheets: 3 cols x 4 rows.
@@ -12,7 +12,6 @@ const DIRS = ['down', 'left', 'right', 'up'] as const;
 type Dir = (typeof DIRS)[number];
 const DIR_ROW: Record<Dir, number> = { down: 0, left: 1, right: 2, up: 3 };
 const WALK_CYCLE = [0, 1, 2, 1];
-const DEFAULT_LOOK: Look = { skin: 'default', hair: 'default', suit: 'default' };
 
 export interface WorldSceneData {
   mvMap: MvMap;
@@ -108,28 +107,15 @@ export class WorldScene extends Phaser.Scene {
       this.cfg.onMoveTo({ x: Math.floor(wp.x / TILE), y: Math.floor(wp.y / TILE) });
     });
 
-    // Walk frame cadence (manual so it works across per-player recoloured textures).
+    // Walk frame cadence (manual stepping across all player sprites).
     this.time.addEvent({ delay: 150, loop: true, callback: () => (this.walkIdx = (this.walkIdx + 1) % WALK_CYCLE.length) });
-  }
-
-  /** Build (and cache) a recoloured spritesheet texture for a look. */
-  private lookTexture(sheet: string, look: Look): string {
-    if (look.skin === 'default' && look.hair === 'default' && look.suit === 'default') return sheet;
-    const key = lookKey(sheet, look);
-    if (this.textures.exists(key)) return key;
-    const src = this.textures.get(sheet).getSourceImage() as HTMLImageElement;
-    const canvas = recolorSheet(src as any, look);
-    this.textures.addCanvas(key, canvas);
-    const tex = this.textures.get(key);
-    for (let f = 0; f < 12; f++) tex.add(f, 0, (f % 3) * CHAR_W, Math.floor(f / 3) * CHAR_H, CHAR_W, CHAR_H);
-    return key;
   }
 
   // ── Player lifecycle ────────────────────────────────────────────────────────
 
-  upsertPlayer(s: { userId: string; username: string; x: number; y: number; dir?: string; avatar?: string; look?: Look }) {
+  upsertPlayer(s: { userId: string; username: string; x: number; y: number; dir?: string; avatar?: string }) {
     let p = this.players.get(s.userId);
-    const texKey = this.lookTexture(sheetFor(s.avatar), s.look ?? DEFAULT_LOOK);
+    const texKey = sheetFor(s.avatar);
     if (!p) {
       const sprite = this.add.sprite(0, 0, texKey, frameAt('down', 1)).setOrigin(0.5, 0.95);
       sprite.setDisplaySize((DISPLAY_H * CHAR_W) / CHAR_H, DISPLAY_H);
