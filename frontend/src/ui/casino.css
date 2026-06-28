@@ -1,0 +1,154 @@
+/* Casino game UI theme — ornate gold frames, dark wood panels, green felt.
+   Evokes the reference art: ROULETTE / BLACKJACK / SLOT MACHINE windows. */
+
+:root {
+  --gold-1: #f7e3a1;
+  --gold-2: #d9af52;
+  --gold-3: #9c7320;
+  --gold-4: #5e430f;
+  --wood-1: #4a2f17;
+  --wood-2: #2c1a0c;
+  --felt-1: #1f7a43;
+  --felt-2: #0e4f29;
+  --felt-edge: #0a3c1f;
+  --ink: #2a1c0a;
+}
+
+@font-face { font-family: 'CasinoFallback'; src: local('Georgia'); }
+
+.cz-overlay {
+  position: fixed; inset: 0; z-index: 20;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 40%, #0008, #000c);
+  backdrop-filter: blur(2px);
+}
+
+/* Ornate frame: layered gold borders over a wood gradient. */
+.cz-frame {
+  position: relative;
+  background:
+    linear-gradient(180deg, var(--wood-1), var(--wood-2));
+  border-radius: 14px;
+  padding: 18px 18px 22px;
+  box-shadow:
+    0 0 0 3px var(--gold-3),
+    0 0 0 6px var(--gold-4),
+    0 0 0 9px var(--gold-2),
+    0 0 0 11px var(--wood-2),
+    0 24px 60px #000b,
+    inset 0 0 40px #0007;
+  max-height: 90vh; overflow-y: auto;
+  font-family: Georgia, 'Times New Roman', serif;
+  color: var(--gold-1);
+}
+.cz-frame::before {
+  /* inner hairline */
+  content: ''; position: absolute; inset: 6px; border-radius: 10px;
+  border: 1px solid #ffe9ad33; pointer-events: none;
+}
+
+/* Title plate */
+.cz-title {
+  text-align: center; margin: -2px auto 14px; padding: 8px 28px;
+  display: inline-block; position: relative; left: 50%; transform: translateX(-50%);
+  font-size: 26px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--gold-1);
+  background: linear-gradient(180deg, #3a2412, #20130a);
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px var(--gold-3), 0 0 0 4px var(--gold-4), inset 0 1px 0 #ffe9ad55;
+  text-shadow: 0 2px 0 #000, 0 0 12px #f7e3a155;
+}
+.cz-close {
+  position: absolute; top: 10px; right: 12px; width: 30px; height: 30px;
+  display: grid; place-items: center; cursor: pointer; font-weight: 800;
+  color: #fff; background: linear-gradient(180deg, #b33, #801c1c);
+  border-radius: 7px; box-shadow: 0 0 0 2px var(--gold-3), inset 0 1px 0 #fff5;
+  border: 0; font-size: 16px;
+}
+
+/* Green felt surface */
+.cz-felt {
+  background:
+    radial-gradient(circle at 50% 30%, var(--felt-1), var(--felt-2) 70%, var(--felt-edge));
+  border-radius: 12px;
+  box-shadow: inset 0 0 30px #00000066, 0 0 0 2px var(--gold-4), 0 0 0 4px var(--gold-2);
+  padding: 14px;
+}
+
+/* Gold beveled action button */
+.cz-btn {
+  cursor: pointer; border: 0; font-family: inherit; font-weight: 800;
+  letter-spacing: 1px; text-transform: uppercase; color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-1), var(--gold-2) 55%, var(--gold-3));
+  border-radius: 10px; padding: 12px 18px; font-size: 16px;
+  box-shadow: 0 0 0 2px var(--gold-4), inset 0 1px 0 #fff8, 0 4px 0 #00000055, 0 6px 12px #0007;
+  transition: transform .05s ease, filter .1s ease;
+}
+.cz-btn:hover { filter: brightness(1.07); }
+.cz-btn:active { transform: translateY(2px); box-shadow: 0 0 0 2px var(--gold-4), inset 0 1px 0 #fff8, 0 2px 0 #00000055; }
+.cz-btn:disabled { filter: grayscale(.6) brightness(.8); cursor: not-allowed; }
+.cz-btn--wide { width: 100%; font-size: 20px; padding: 14px; }
+.cz-btn--dark { color: var(--gold-1); background: linear-gradient(180deg, #4a2f17, #2c1a0c); box-shadow: 0 0 0 2px var(--gold-3), inset 0 1px 0 #ffffff22, 0 4px 0 #0006; }
+
+/* Inset label box (BALANCE / BET / SCORE) */
+.cz-box {
+  background: linear-gradient(180deg, #20130a, #0e0905);
+  border-radius: 9px; padding: 6px 14px; text-align: center;
+  box-shadow: 0 0 0 2px var(--gold-3), 0 0 0 4px var(--gold-4), inset 0 0 14px #000a;
+  min-width: 72px;
+}
+.cz-box .cz-box-label { font-size: 10px; letter-spacing: 2px; color: #e9cf8e; opacity: .8; }
+.cz-box .cz-box-val { font-size: 20px; font-weight: 800; color: var(--gold-1); font-variant-numeric: tabular-nums; }
+
+.cz-row { display: flex; gap: 10px; align-items: center; justify-content: center; }
+
+/* Chips */
+.cz-chip {
+  width: 46px; height: 46px; border-radius: 50%; cursor: pointer; border: 0;
+  font-weight: 800; font-size: 12px; color: #fff; position: relative;
+  box-shadow: inset 0 0 0 3px #ffffffcc, inset 0 0 0 6px currentColor, 0 3px 6px #0008;
+  background: radial-gradient(circle at 50% 40%, #ffffff22, #00000022);
+}
+.cz-chip[data-on='true'] { outline: 3px solid var(--gold-1); transform: translateY(-3px); }
+
+/* Playing card */
+.cz-card {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: space-between;
+  width: 46px; height: 64px; margin: 3px; padding: 4px;
+  background: linear-gradient(180deg, #fffef7, #efe6cf); color: #1a1a1a;
+  border-radius: 6px; box-shadow: 0 2px 5px #0007, inset 0 0 0 1px #0002;
+  font-weight: 800; font-size: 16px; font-family: Georgia, serif;
+}
+.cz-card.red { color: #c0202a; }
+.cz-card .cz-card-tr { align-self: flex-end; transform: rotate(180deg); font-size: 13px; }
+.cz-card .cz-card-tl { align-self: flex-start; font-size: 13px; }
+.cz-card.back { background: repeating-linear-gradient(45deg, #7a1e1e, #7a1e1e 6px, #5a1414 6px, #5a1414 12px); }
+
+/* Reels (slots) */
+.cz-reels { display: flex; gap: 8px; justify-content: center; padding: 10px; background: linear-gradient(180deg,#241a12,#120c08); border-radius: 10px; box-shadow: 0 0 0 3px var(--gold-2), 0 0 0 6px var(--gold-4), inset 0 0 20px #000; }
+.cz-reel { width: 84px; height: 84px; display: grid; place-items: center; font-size: 50px; background: linear-gradient(180deg,#fffef7,#e6dcc4); border-radius: 8px; box-shadow: inset 0 4px 10px #0003, inset 0 -4px 10px #0003; }
+.cz-reel.spin { animation: reelSpin .35s linear infinite; }
+@keyframes reelSpin { 0%{filter:blur(1px)} 50%{filter:blur(3px)} 100%{filter:blur(1px)} }
+
+/* Roulette number grid */
+.cz-rl-grid { display: grid; grid-template-columns: 40px repeat(12, 1fr) 44px; gap: 3px; }
+.cz-rl-cell { padding: 7px 0; text-align: center; font-weight: 800; color: #fff; border-radius: 4px; cursor: pointer; font-size: 12px; box-shadow: inset 0 0 0 1px #0003; }
+.cz-rl-cell:hover { outline: 2px solid var(--gold-1); }
+.cz-rl-red { background: linear-gradient(180deg,#d23b3b,#a02020); }
+.cz-rl-black { background: linear-gradient(180deg,#333,#111); }
+.cz-rl-green { background: linear-gradient(180deg,#2faa5a,#0e6a34); }
+.cz-rl-zero { grid-row: span 3; display: grid; place-items: center; }
+.cz-rl-out { background: linear-gradient(180deg,#1f7a43,#0e4f29); box-shadow: inset 0 0 0 1px #ffffff22, inset 0 0 0 2px #0e4f29; }
+
+.cz-input { background: #1a1209; color: var(--gold-1); border: 0; border-radius: 8px; padding: 8px 10px; font-family: inherit; font-weight: 700; box-shadow: inset 0 0 0 2px var(--gold-4), inset 0 2px 8px #000; width: 100%; }
+.cz-note { font-size: 11px; color: #e9cf8e99; margin-top: 10px; word-break: break-all; text-align: center; }
+.cz-err { color: #ff8a8a; font-size: 13px; text-align: center; margin-top: 6px; }
+.cz-win { color: #ffe07a; font-weight: 800; text-align: center; text-shadow: 0 0 10px #ffd24d88; }
+
+/* Wheel */
+.cz-wheel { width: 96px; height: 96px; border-radius: 50%; box-shadow: 0 0 0 4px var(--gold-2), 0 0 0 8px var(--gold-4), inset 0 0 18px #000; position: relative;
+  background: conic-gradient(#0e6a34 0 10%, #a02020 10% 20%, #111 20% 30%, #a02020 30% 40%, #111 40% 50%, #a02020 50% 60%, #111 60% 70%, #a02020 70% 80%, #111 80% 90%, #a02020 90% 100%); }
+.cz-wheel.spin { animation: wheelSpin 1.2s cubic-bezier(.2,.7,.2,1) infinite; }
+@keyframes wheelSpin { to { transform: rotate(360deg); } }
+.cz-wheel-hub { position: absolute; inset: 34px; border-radius: 50%; background: radial-gradient(circle,#e9cf8e,#9c7320); box-shadow: inset 0 0 6px #000; }
+.cz-wheel-num { position: absolute; inset: 0; display: grid; place-items: center; font-size: 26px; font-weight: 800; color: #fff; text-shadow: 0 0 6px #000, 0 2px 2px #000; }

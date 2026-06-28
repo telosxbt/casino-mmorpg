@@ -41,20 +41,25 @@ for (let y = 0; y < height; y++) {
 
 const passable = (x, y) => x >= 0 && y >= 0 && x < width && y < height && !collision[y * width + x];
 
-// Interactable anchors: the tile the player stands ON to use the object must be
-// passable. Hand-placed across the floor; validated against collision below.
+// Interactable anchors: the tile the player stands ON to use the object. Placed
+// in front of the real casino furniture in the MV map (verified against the
+// baked render + collision grid): slots line the left hall, blackjack tables sit
+// in the central pit, roulette wheels fill the right-hand gaming hall.
 const interactables = [
-  { id: 'roulette-1', type: 'ROULETTE', label: 'Roulette I', x: 9, y: 7 },
-  { id: 'roulette-2', type: 'ROULETTE', label: 'Roulette II', x: 30, y: 7 },
-  { id: 'roulette-3', type: 'ROULETTE', label: 'Roulette III', x: 50, y: 7 },
-  { id: 'blackjack-1', type: 'BLACKJACK', label: 'Blackjack I', x: 18, y: 13 },
-  { id: 'blackjack-2', type: 'BLACKJACK', label: 'Blackjack II', x: 41, y: 13 },
-  { id: 'slot-1', type: 'SLOTS', label: 'Lucky 7s', x: 5, y: 15 },
-  { id: 'slot-2', type: 'SLOTS', label: 'Mega Fruit', x: 13, y: 15 },
-  { id: 'slot-3', type: 'SLOTS', label: 'Gold Rush', x: 24, y: 15 },
-  { id: 'slot-4', type: 'SLOTS', label: 'Diamond Spin', x: 35, y: 15 },
-  { id: 'slot-5', type: 'SLOTS', label: 'Neon Nights', x: 46, y: 15 },
-  { id: 'slot-6', type: 'SLOTS', label: 'Cosmic Cash', x: 54, y: 15 },
+  // Roulette — right-hand gaming hall (wheel tables).
+  { id: 'roulette-1', type: 'ROULETTE', label: 'Roulette I', x: 50, y: 13 },
+  { id: 'roulette-2', type: 'ROULETTE', label: 'Roulette II', x: 54, y: 13 },
+  { id: 'roulette-3', type: 'ROULETTE', label: 'Roulette III', x: 50, y: 16 },
+  // Blackjack — central pit (green card tables).
+  { id: 'blackjack-1', type: 'BLACKJACK', label: 'Blackjack I', x: 19, y: 13 },
+  { id: 'blackjack-2', type: 'BLACKJACK', label: 'Blackjack II', x: 34, y: 13 },
+  // Slots — left hall, standing in front of each machine row.
+  { id: 'slot-1', type: 'SLOTS', label: 'Lucky 7s', x: 4, y: 7 },
+  { id: 'slot-2', type: 'SLOTS', label: 'Mega Fruit', x: 10, y: 7 },
+  { id: 'slot-3', type: 'SLOTS', label: 'Gold Rush', x: 4, y: 10 },
+  { id: 'slot-4', type: 'SLOTS', label: 'Diamond Spin', x: 10, y: 10 },
+  { id: 'slot-5', type: 'SLOTS', label: 'Neon Nights', x: 4, y: 13 },
+  { id: 'slot-6', type: 'SLOTS', label: 'Cosmic Cash', x: 10, y: 13 },
 ];
 
 // Find a guaranteed-passable spawn near the map centre.

@@ -10,3 +10,4 @@ backend/prisma/*.db
 coverage/
 .vite/
 *.tsbuildinfo
+tools/_*.png

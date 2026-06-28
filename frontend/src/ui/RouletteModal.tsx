@@ -1,22 +1,27 @@
 import { useEffect, useState } from 'react';
-import { Modal, field, fairnessNote } from './Modal';
+import { Modal } from './Modal';
 import { connect } from '../lib/socket';
 import { api } from '../lib/api';
 import { useGame, useSession, type Interactable } from '../store';
 import { fromBase, toBase } from '../lib/format';
 
 type Phase = 'BETTING' | 'SPINNING' | 'SETTLED';
-const OUTSIDE = ['red', 'black', 'even', 'odd', 'low', 'high'] as const;
+const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+const colorClass = (n: number) => (n === 0 ? 'cz-rl-green' : RED.has(n) ? 'cz-rl-red' : 'cz-rl-black');
+const CHIPS: { v: number; c: string }[] = [
+  { v: 10, c: '#c0c0c0' }, { v: 50, c: '#d23b3b' }, { v: 100, c: '#2f6fd2' },
+  { v: 500, c: '#2faa5a' }, { v: 1000, c: '#7a4fd2' }, { v: 5000, c: '#caa23a' },
+];
 
 export function RouletteModal({ table, onClose }: { table: Interactable; onClose: () => void }) {
-  const { decimals } = useGame();
+  const { decimals, balance } = useGame();
   const token = useSession((s) => s.tokens?.accessToken)!;
   const [phase, setPhase] = useState<Phase>('BETTING');
   const [countdown, setCountdown] = useState(0);
   const [seats, setSeats] = useState(0);
   const [full, setFull] = useState(false);
-  const [bet, setBet] = useState('1');
-  const [myBets, setMyBets] = useState<string[]>([]);
+  const [chip, setChip] = useState(100);
+  const [staked, setStaked] = useState(0);
   const [last, setLast] = useState<{ result: number; color: string } | null>(null);
   const [fairness, setFairness] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -29,32 +34,17 @@ export function RouletteModal({ table, onClose }: { table: Interactable; onClose
     s.on('roulette:seats', (d: any) => setSeats(d.seats));
     s.on('roulette:error', (d: any) => setErr(d.reason));
     s.on('roulette:state', (d: any) => {
-      setPhase('BETTING');
-      setMyBets([]);
-      setLast(null);
-      setFairness(null);
-      setSeats(d.seats);
-      setCountdown(Math.max(0, Math.round((d.bettingEndsAt - Date.now()) / 1000)));
+      setPhase('BETTING'); setStaked(0); setLast(null); setFairness(null); setErr(null);
+      setSeats(d.seats); setCountdown(Math.max(0, Math.round((d.bettingEndsAt - Date.now()) / 1000)));
     });
-    s.on('roulette:spin', (d: any) => {
-      setPhase('SPINNING');
-      setLast({ result: d.result, color: d.color });
-    });
+    s.on('roulette:spin', (d: any) => { setPhase('SPINNING'); setLast({ result: d.result, color: d.color }); });
     s.on('roulette:result', (d: any) => {
-      setPhase('SETTLED');
-      setLast({ result: d.result, color: d.color });
-      setFairness(d.fairness);
+      setPhase('SETTLED'); setLast({ result: d.result, color: d.color }); setFairness(d.fairness);
       api.balance().then((b) => useGame.getState().setWallet(b)).catch(() => {});
     });
     return () => {
       s.emit('roulette:leave');
-      s.off('roulette:full');
-      s.off('roulette:joined');
-      s.off('roulette:seats');
-      s.off('roulette:error');
-      s.off('roulette:state');
-      s.off('roulette:spin');
-      s.off('roulette:result');
+      ['roulette:full','roulette:joined','roulette:seats','roulette:error','roulette:state','roulette:spin','roulette:result'].forEach((e) => s.off(e));
     };
   }, [table.id, token]);
 
@@ -65,89 +55,100 @@ export function RouletteModal({ table, onClose }: { table: Interactable; onClose
   }, [phase, countdown]);
 
   function place(type: string, selection: object = {}) {
+    if (phase !== 'BETTING') return;
     setErr(null);
-    const amount = toBase(bet, decimals).toString();
-    connect('roulette', token).emit('roulette:bet', { tableId: table.id, type, selection, amount });
-    setMyBets((b) => [...b, `${type} ${JSON.stringify(selection) !== '{}' ? JSON.stringify(selection) : ''} (${bet})`]);
+    connect('roulette', token).emit('roulette:bet', { tableId: table.id, type, selection, amount: toBase(String(chip), decimals).toString() });
+    setStaked((s) => s + chip);
   }
 
   if (full) {
     return (
-      <Modal title={`🎡 ${table.label}`} onClose={onClose}>
-        <p style={{ color: '#e04b4b', fontWeight: 700 }}>Table Full — try another roulette table.</p>
+      <Modal title="Roulette" onClose={onClose}>
+        <div className="cz-felt" style={{ textAlign: 'center', padding: 28 }}>
+          <div className="cz-win" style={{ color: '#ff8a8a' }}>TABLE FULL</div>
+          <div style={{ color: '#cdebd6', marginTop: 8 }}>Try another roulette table.</div>
+        </div>
       </Modal>
     );
   }
 
-  const colorHex = last?.color === 'red' ? '#e04b4b' : last?.color === 'green' ? '#4be07a' : '#222';
+  const cols = Array.from({ length: 12 }, (_, i) => i + 1);
 
   return (
-    <Modal title={`🎡 ${table.label}`} onClose={onClose} width={520}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-        <div style={{ width: 64, height: 64, borderRadius: '50%', background: colorHex, display: 'grid', placeItems: 'center', fontSize: 24, fontWeight: 800, border: '3px solid #444' }}>
-          {last ? last.result : '—'}
+    <Modal title="Roulette" onClose={onClose} width={680}>
+      <div className="cz-row" style={{ alignItems: 'stretch', gap: 14 }}>
+        <div className={`cz-wheel ${phase === 'SPINNING' ? 'spin' : ''}`}>
+          <div className="cz-wheel-hub" />
+          {last && phase !== 'SPINNING' && <div className="cz-wheel-num" style={{ color: last.color === 'red' ? '#ff6b6b' : last.color === 'green' ? '#7bf3a6' : '#fff' }}>{last.result}</div>}
         </div>
-        <div>
-          <div style={{ fontWeight: 700 }}>
-            {phase === 'BETTING' ? `Betting — ${countdown}s` : phase === 'SPINNING' ? 'Spinning…' : 'Result'}
+        <div className="cz-felt" style={{ flex: 1, padding: 10 }}>
+          {/* number grid */}
+          <div className="cz-rl-grid">
+            <div className={`cz-rl-cell cz-rl-green cz-rl-zero`} style={{ gridColumn: 1, gridRow: '1 / span 3' }} onClick={() => place('straight', { number: 0 })}>0</div>
+            {cols.map((c) => (
+              <Cell key={`t${c}`} n={c * 3} col={c + 1} row={1} place={place} />
+            ))}
+            {cols.map((c) => (
+              <Cell key={`m${c}`} n={c * 3 - 1} col={c + 1} row={2} place={place} />
+            ))}
+            {cols.map((c) => (
+              <Cell key={`b${c}`} n={c * 3 - 2} col={c + 1} row={3} place={place} />
+            ))}
+            <div className="cz-rl-cell cz-rl-out" style={{ gridColumn: 14, gridRow: 1 }} onClick={() => place('column', { column: 3 })}>2:1</div>
+            <div className="cz-rl-cell cz-rl-out" style={{ gridColumn: 14, gridRow: 2 }} onClick={() => place('column', { column: 2 })}>2:1</div>
+            <div className="cz-rl-cell cz-rl-out" style={{ gridColumn: 14, gridRow: 3 }} onClick={() => place('column', { column: 1 })}>2:1</div>
           </div>
-          <div style={{ fontSize: 12, color: '#99a' }}>Seats {seats}/8</div>
+          {/* dozens */}
+          <div style={{ display: 'grid', gridTemplateColumns: '40px repeat(3,1fr) 44px', gap: 3, marginTop: 3 }}>
+            <div />
+            <div className="cz-rl-cell cz-rl-out" onClick={() => place('dozen', { dozen: 1 })}>1st 12</div>
+            <div className="cz-rl-cell cz-rl-out" onClick={() => place('dozen', { dozen: 2 })}>2nd 12</div>
+            <div className="cz-rl-cell cz-rl-out" onClick={() => place('dozen', { dozen: 3 })}>3rd 12</div>
+            <div />
+          </div>
+          {/* outside */}
+          <div style={{ display: 'grid', gridTemplateColumns: '40px repeat(6,1fr) 44px', gap: 3, marginTop: 3 }}>
+            <div />
+            <div className="cz-rl-cell cz-rl-out" onClick={() => place('low')}>1-18</div>
+            <div className="cz-rl-cell cz-rl-out" onClick={() => place('even')}>EVEN</div>
+            <div className="cz-rl-cell cz-rl-red" onClick={() => place('red')}>◆</div>
+            <div className="cz-rl-cell cz-rl-black" onClick={() => place('black')}>◆</div>
+            <div className="cz-rl-cell cz-rl-out" onClick={() => place('odd')}>ODD</div>
+            <div className="cz-rl-cell cz-rl-out" onClick={() => place('high')}>19-36</div>
+            <div />
+          </div>
         </div>
       </div>
 
-      <label style={{ fontSize: 12, color: '#99a' }}>Chip size</label>
-      <input style={{ ...field, margin: '4px 0 12px' }} value={bet} onChange={(e) => setBet(e.target.value)} />
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6 }}>
-        {OUTSIDE.map((o) => (
-          <button key={o} disabled={phase !== 'BETTING'} style={chipBtn(o)} onClick={() => place(o)}>
-            {o.toUpperCase()}
-          </button>
-        ))}
-        {[1, 2, 3].map((d) => (
-          <button key={`dz${d}`} disabled={phase !== 'BETTING'} style={chipBtn('')} onClick={() => place('dozen', { dozen: d })}>
-            DOZEN {d}
-          </button>
-        ))}
-        {[1, 2, 3].map((c) => (
-          <button key={`col${c}`} disabled={phase !== 'BETTING'} style={chipBtn('')} onClick={() => place('column', { column: c })}>
-            COL {c}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ marginTop: 10 }}>
-        <StraightGrid disabled={phase !== 'BETTING'} onPick={(n) => place('straight', { number: n })} />
-      </div>
-
-      {myBets.length > 0 && (
-        <div style={{ fontSize: 12, color: '#99a', marginTop: 10 }}>This round: {myBets.join(', ')}</div>
-      )}
-      {err && <p style={{ color: '#f55' }}>{err}</p>}
-      {fairness && (
-        <div style={fairnessNote}>
-          Provably fair — hash {fairness.serverSeedHash?.slice(0, 16)}… seed {fairness.serverSeed?.slice(0, 16)}…
+      <div className="cz-row" style={{ marginTop: 14, justifyContent: 'space-between' }}>
+        <div className="cz-box"><div className="cz-box-label">BALANCE</div><div className="cz-box-val">{fromBase(balance, decimals)}</div></div>
+        <div className="cz-box"><div className="cz-box-label">STAKED</div><div className="cz-box-val">{staked}</div></div>
+        <div className="cz-box" style={{ minWidth: 130 }}>
+          <div className="cz-box-label">{phase === 'BETTING' ? `BETTING · ${countdown}s` : phase === 'SPINNING' ? 'SPINNING…' : 'RESULT'}</div>
+          <div className="cz-box-val">{phase === 'BETTING' ? '🎯' : last ? last.result : '—'}</div>
         </div>
-      )}
+        <div className="cz-box"><div className="cz-box-label">SEATS</div><div className="cz-box-val">{seats}/8</div></div>
+      </div>
+
+      <div className="cz-row" style={{ marginTop: 12 }}>
+        <span style={{ fontSize: 11, letterSpacing: 2, color: '#e9cf8e' }}>CHOOSE CHIP</span>
+        {CHIPS.map((c) => (
+          <button key={c.v} className="cz-chip" data-on={chip === c.v} style={{ color: c.c }} onClick={() => setChip(c.v)}>
+            {c.v >= 1000 ? `${c.v / 1000}K` : c.v}
+          </button>
+        ))}
+      </div>
+
+      {err && <div className="cz-err">{err}</div>}
+      {fairness && <div className="cz-note">Provably fair · hash {fairness.serverSeedHash?.slice(0, 12)}… · seed {fairness.serverSeed?.slice(0, 12)}…</div>}
     </Modal>
   );
 }
 
-function StraightGrid({ onPick, disabled }: { onPick: (n: number) => void; disabled: boolean }) {
+function Cell({ n, col, row, place }: { n: number; col: number; row: number; place: (t: string, s?: object) => void }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12,1fr)', gap: 2 }}>
-      {Array.from({ length: 37 }, (_, n) => (
-        <button key={n} disabled={disabled} onClick={() => onPick(n)}
-          style={{ fontSize: 11, padding: '4px 0', background: '#1c1c2a', color: '#fff', border: '1px solid #2a2a3a', borderRadius: 4, cursor: 'pointer' }}>
-          {n}
-        </button>
-      ))}
+    <div className={`cz-rl-cell ${colorClass(n)}`} style={{ gridColumn: col, gridRow: row }} onClick={() => place('straight', { number: n })}>
+      {n}
     </div>
   );
 }
-
-const chipBtn = (o: string): React.CSSProperties => ({
-  padding: '8px 0',
-  background: o === 'red' ? '#e04b4b' : o === 'black' ? '#333' : '#3a3a5a',
-  color: '#fff', border: 0, borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-});

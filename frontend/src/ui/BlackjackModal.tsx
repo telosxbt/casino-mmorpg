@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, field } from './Modal';
+import { Modal } from './Modal';
 import { connect } from '../lib/socket';
 import { api } from '../lib/api';
 import { useGame, useSession, type Interactable } from '../store';
@@ -12,11 +12,14 @@ const SUIT: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
 function CardView({ c }: { c: Card }) {
   const red = c.s === 'H' || c.s === 'D';
   return (
-    <span style={{ display: 'inline-block', minWidth: 30, padding: '6px 4px', margin: 2, background: '#fff', color: red ? '#c0202a' : '#111', borderRadius: 5, textAlign: 'center', fontWeight: 700 }}>
-      {RANK(c.r)}{SUIT[c.s]}
-    </span>
+    <div className={`cz-card ${red ? 'red' : ''}`}>
+      <span className="cz-card-tl">{RANK(c.r)}{SUIT[c.s]}</span>
+      <span>{SUIT[c.s]}</span>
+      <span className="cz-card-tr">{RANK(c.r)}{SUIT[c.s]}</span>
+    </div>
   );
 }
+const Back = () => <div className="cz-card back" />;
 
 export function BlackjackModal({ table, onClose }: { table: Interactable; onClose: () => void }) {
   const { decimals } = useGame();
@@ -24,7 +27,7 @@ export function BlackjackModal({ table, onClose }: { table: Interactable; onClos
   const selfId = useSession((s) => s.tokens?.user)!;
   const [state, setState] = useState('WAITING');
   const [bettingEndsAt, setBettingEndsAt] = useState(0);
-  const [bet, setBet] = useState('1');
+  const [bet, setBet] = useState(100);
   const [full, setFull] = useState(false);
   const [dealer, setDealer] = useState<Card[]>([]);
   const [dealerUp, setDealerUp] = useState<Card | null>(null);
@@ -40,7 +43,7 @@ export function BlackjackModal({ table, onClose }: { table: Interactable; onClos
     s.on('blackjack:error', (d: any) => setErr(d.reason));
     s.on('blackjack:state', (d: any) => {
       setState(d.state); setBettingEndsAt(d.bettingEndsAt); setDealer([]); setDealerUp(null);
-      setSeats([]); setResults(null); setTurnUser(null);
+      setSeats([]); setResults(null); setTurnUser(null); setErr(null);
     });
     s.on('blackjack:deal', (d: any) => { setState('PLAYER_TURNS'); setDealerUp(d.dealerUp); setSeats(d.seats); });
     s.on('blackjack:hand', (seat: any) => setSeats((prev) => prev.map((x) => (x.userId === seat.userId ? seat : x))));
@@ -57,16 +60,20 @@ export function BlackjackModal({ table, onClose }: { table: Interactable; onClos
   }, [table.id, token]);
 
   const myTurn = turnUser === selfId;
+  const me = seats.find((x) => x.userId === selfId);
+  const others = seats.filter((x) => x.userId !== selfId);
   const act = (action: string) => connect('blackjack', token).emit('blackjack:action', { tableId: table.id, action });
-  const placeBet = () => {
-    setErr(null);
-    connect('blackjack', token).emit('blackjack:bet', { tableId: table.id, amount: toBase(bet, decimals).toString() });
-  };
+  const placeBet = () => { setErr(null); connect('blackjack', token).emit('blackjack:bet', { tableId: table.id, amount: toBase(String(bet), decimals).toString() }); };
+  const dealerValue = dealer.length ? handVal(dealer) : dealerUp ? handVal([dealerUp]) : 0;
+  const myResult = results?.find((r) => r.userId === selfId);
 
   if (full) {
     return (
-      <Modal title={`🃏 ${table.label}`} onClose={onClose}>
-        <p style={{ color: '#e04b4b', fontWeight: 700 }}>Table Full — try the other blackjack table.</p>
+      <Modal title="Blackjack" onClose={onClose}>
+        <div className="cz-felt" style={{ textAlign: 'center', padding: 28 }}>
+          <div className="cz-win" style={{ color: '#ff8a8a' }}>TABLE FULL</div>
+          <div style={{ color: '#cdebd6', marginTop: 8 }}>Try the other blackjack table.</div>
+        </div>
       </Modal>
     );
   }
@@ -74,59 +81,88 @@ export function BlackjackModal({ table, onClose }: { table: Interactable; onClos
   const countdown = state === 'WAITING' ? Math.max(0, Math.round((bettingEndsAt - Date.now()) / 1000)) : 0;
 
   return (
-    <Modal title={`🃏 ${table.label}`} onClose={onClose} width={520}>
-      <div style={{ marginBottom: 10, color: '#99a', fontSize: 13 }}>
-        {state === 'WAITING' ? `Place your bet — ${countdown}s` : state.replace('_', ' ')}
-      </div>
-
-      <div style={section}>
-        <div style={label}>Dealer</div>
-        <div>
-          {dealer.length ? dealer.map((c, i) => <CardView key={i} c={c} />) : dealerUp ? (<><CardView c={dealerUp} /><span style={hidden}>🂠</span></>) : '—'}
-        </div>
-      </div>
-
-      <div style={section}>
-        <div style={label}>Players</div>
-        {seats.length === 0 && <div style={{ color: '#667' }}>No hands yet.</div>}
-        {seats.map((seat) => (
-          <div key={seat.userId} style={{ marginBottom: 6, outline: turnUser === seat.userId ? '2px solid #e0c84b' : 'none', borderRadius: 6, padding: 2 }}>
-            <span style={{ fontSize: 12, color: seat.userId === selfId ? '#7ad' : '#da7', marginRight: 6 }}>
-              {seat.username}{seat.userId === selfId ? ' (you)' : ''} · {seat.value}
-            </span>
-            {seat.cards?.map((c: Card, i: number) => <CardView key={i} c={c} />)}
-          </div>
-        ))}
-      </div>
-
-      {results && (
-        <div style={{ ...section, color: '#4be07a' }}>
-          {results.map((r) => (
-            <div key={r.userId} style={{ fontSize: 13 }}>
-              {r.userId === selfId ? 'You' : r.userId.slice(0, 6)}: {r.result} {Number(r.payout) > 0 ? `(+${fromBase(r.payout, decimals)})` : ''}
+    <Modal title="Blackjack" onClose={onClose} width={560}>
+      <div className="cz-felt">
+        {/* Dealer */}
+        <div className="cz-row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <div style={feltLabel}>DEALER</div>
+            <div className="cz-row" style={{ justifyContent: 'flex-start', minHeight: 70 }}>
+              {dealer.length ? dealer.map((c, i) => <CardView key={i} c={c} />)
+                : dealerUp ? <><CardView c={dealerUp} /><Back /></>
+                : <span style={{ color: '#cdebd6' }}>—</span>}
             </div>
-          ))}
+          </div>
+          <div className="cz-box"><div className="cz-box-label">DEALER</div><div className="cz-box-val">{state === 'PLAYER_TURNS' && !dealer.length ? '?' : dealerValue || '—'}</div></div>
+        </div>
+
+        <div style={{ textAlign: 'center', color: '#bfe6cd', letterSpacing: 2, fontSize: 12, margin: '8px 0' }}>
+          ❖ BLACKJACK PAYS 3 TO 2 ❖
+        </div>
+
+        {/* Player (you) */}
+        <div className="cz-row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <div style={feltLabel}>PLAYER {myTurn && <span style={{ color: '#ffe07a' }}>● your turn</span>}</div>
+            <div className="cz-row" style={{ justifyContent: 'flex-start', minHeight: 70 }}>
+              {me?.cards?.length ? me.cards.map((c: Card, i: number) => <CardView key={i} c={c} />) : <span style={{ color: '#cdebd6' }}>—</span>}
+            </div>
+          </div>
+          <div className="cz-box"><div className="cz-box-label">PLAYER</div><div className="cz-box-val">{me ? me.value : '—'}</div></div>
+        </div>
+
+        {others.length > 0 && (
+          <div style={{ marginTop: 8, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            {others.map((o) => (
+              <div key={o.userId} style={{ fontSize: 11, color: '#bfe6cd', outline: turnUser === o.userId ? '2px solid #ffe07a' : 'none', borderRadius: 6, padding: 3 }}>
+                {o.username} · {o.value}
+                <div className="cz-row" style={{ justifyContent: 'flex-start', transform: 'scale(.7)', transformOrigin: 'left' }}>
+                  {o.cards?.map((c: Card, i: number) => <CardView key={i} c={c} />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {myResult && (
+        <div className="cz-win" style={{ marginTop: 12, fontSize: 18 }}>
+          {myResult.result}{Number(myResult.payout) > 0 ? ` · +${fromBase(myResult.payout, decimals)} 🪙` : ''}
         </div>
       )}
 
-      {state === 'WAITING' ? (
-        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-          <input style={field} value={bet} onChange={(e) => setBet(e.target.value)} />
-          <button style={actBtn} onClick={placeBet}>Bet</button>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button style={actBtn} disabled={!myTurn} onClick={() => act('hit')}>Hit</button>
-          <button style={actBtn} disabled={!myTurn} onClick={() => act('stand')}>Stand</button>
-          <button style={actBtn} disabled={!myTurn} onClick={() => act('double')}>Double</button>
-        </div>
-      )}
-      {err && <p style={{ color: '#f55' }}>{err}</p>}
+      <div className="cz-row" style={{ marginTop: 14, justifyContent: 'center' }}>
+        {state === 'WAITING' ? (
+          <>
+            <div className="cz-box">
+              <div className="cz-box-label">BET — {countdown}s</div>
+              <div className="cz-row" style={{ gap: 8 }}>
+                <button className="cz-btn cz-btn--dark" style={{ padding: '2px 10px' }} onClick={() => setBet((b) => Math.max(1, b - 50))}>◀</button>
+                <span className="cz-box-val">{bet}</span>
+                <button className="cz-btn cz-btn--dark" style={{ padding: '2px 10px' }} onClick={() => setBet((b) => b + 50)}>▶</button>
+              </div>
+            </div>
+            <button className="cz-btn" onClick={placeBet}>Deal</button>
+          </>
+        ) : (
+          <>
+            <button className="cz-btn" disabled={!myTurn} onClick={() => act('hit')}>👆 Hit</button>
+            <button className="cz-btn" disabled={!myTurn} onClick={() => act('stand')}>✋ Stand</button>
+            <button className="cz-btn cz-btn--dark" disabled={!myTurn} onClick={() => act('double')}>Double</button>
+          </>
+        )}
+      </div>
+      {err && <div className="cz-err">{err}</div>}
     </Modal>
   );
 }
 
-const section: React.CSSProperties = { background: '#10101a', borderRadius: 8, padding: 10, marginBottom: 10 };
-const label: React.CSSProperties = { fontSize: 11, color: '#778', marginBottom: 6, textTransform: 'uppercase' };
-const hidden: React.CSSProperties = { display: 'inline-block', fontSize: 28, margin: 2, color: '#446' };
-const actBtn: React.CSSProperties = { flex: 1, background: '#3a3a5a', color: '#fff', border: 0, padding: '10px 0', borderRadius: 8, cursor: 'pointer', fontWeight: 600 };
+// Local hand value (display only; server is authoritative).
+function handVal(cards: Card[]): number {
+  let total = 0, aces = 0;
+  for (const c of cards) { total += c.r === 1 ? 11 : Math.min(c.r, 10); if (c.r === 1) aces++; }
+  while (total > 21 && aces > 0) { total -= 10; aces--; }
+  return total;
+}
+
+const feltLabel: React.CSSProperties = { fontSize: 11, letterSpacing: 2, color: '#bfe6cd', marginBottom: 4 };
