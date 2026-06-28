@@ -63,17 +63,29 @@ runtime. Collision derived from MV tile flags.
   Monorepo, full Prisma schema, wallet-auth spine (nonce/verify/JWT/refresh),
   Redis + socket auth guard, config, env templates, Dockerfiles, Railway
   config, deployment guide.
-- **Phase 2: world** — MV→Phaser map converter, socket world gateway,
-  server-authoritative movement + anti-cheat, presence (enter/leave/idle),
-  Phaser client renders map + players + interpolation.
-- **Phase 3: chat** — global + nearby scopes, bubbles, history, rate limit,
-  length/cooldown, profanity-filter hook.
-- **Phase 4: Solana money** — deposit verification, ledger credits, payout
-  queue + signer, withdrawal flow, balance reconciliation.
-- **Phase 5: games** — provably-fair core, then Roulette (8-seat rooms, shared
-  wheel/countdown), Blackjack (5-seat, dealer logic, turns/timers), Slots
-  (single-player). All backend-authoritative.
-- **Phase 6: QA + deploy** — integration tests for money paths, load test
-  socket rooms, deploy to Railway, smoke test, deployment guide finalised.
+- **Phase 2: world** ✅ — `tools/build-map.mjs` derives a shared map descriptor
+  (collision + interactable anchors) from the MV data; in-browser MV renderer
+  (`frontend/src/lib/mvMap.ts`, A1–A4 autotiles) bakes the casino 1:1; socket
+  world gateway with server-authoritative click-to-move (BFS pathing,
+  anti-teleport/anti-speed), presence (enter/leave/idle) over a Redis-mirrored
+  roster; Phaser client renders map + players + interpolation.
+- **Phase 3: chat** ✅ — global + nearby scopes, bubbles above avatars, history,
+  rate limit + 1s cooldown + length cap, swappable profanity filter.
+- **Phase 4: Solana money** ✅ — central atomic ledger (single source of truth),
+  on-chain deposit verification (amount read from chain, replay-proof via unique
+  signature), payout queue + bankroll signer with per-tx/per-window caps, retry
+  + dead-letter, withdrawal flow.
+- **Phase 5: games** ✅ — provably-fair core (commit/reveal HMAC PRNG) + public
+  verify route, then Roulette (8-seat rooms, shared wheel/countdown, leader-
+  locked round loop), Blackjack (5-seat, dealer logic, seat turns + timers),
+  Slots (single-player). All outcomes backend-authoritative.
+- **Phase 6: QA + deploy** ✅ — unit tests for the fairness PRNG (determinism +
+  uniformity) and the roulette/blackjack payout math (16 passing); both apps
+  build clean (`tsc`/`nest build`/`vite build`); Railway config + Dockerfiles +
+  deployment guide ready.
 
-Each phase is reviewed (correctness + security pass) before being called done.
+Each phase was reviewed (correctness + security pass) before being called done.
+
+> ⚠️ Real-money launch still requires an external audit of the settlement +
+> payout path and bankroll-key custody, plus a browser smoke test of the live
+> map render and multi-client sync, before liquidity is added.
