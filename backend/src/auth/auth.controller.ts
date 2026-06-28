@@ -1,7 +1,7 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
-import { NonceDto, VerifyDto, RefreshDto } from './dto';
+import { NonceDto, VerifyDto, RefreshDto, ProfileDto } from './dto';
 import { RedisService } from '../redis/redis.service';
 
 @Controller('auth')
@@ -27,6 +27,18 @@ export class AuthController {
   @Post('refresh')
   async refresh(@Body() dto: RefreshDto) {
     return this.auth.refresh(dto.refreshToken);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('me')
+  async me(@Req() req: any) {
+    return this.auth.getProfile(req.user.sub);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('profile')
+  async profile(@Req() req: any, @Body() dto: ProfileDto) {
+    return this.auth.setProfile(req.user.sub, dto.username, dto.gender);
   }
 
   @UseGuards(AuthGuard('jwt'))

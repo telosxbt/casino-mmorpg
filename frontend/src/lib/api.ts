@@ -47,7 +47,19 @@ export interface Balance {
   decimals: number;
 }
 
+export interface Profile {
+  username: string;
+  avatar: string;
+  gender: 'MALE' | 'FEMALE' | null;
+  profileComplete: boolean;
+}
+
 export const api = {
+  me: () => authedFetch('/auth/me').then((r) => json<Profile>(r)),
+  setProfile: (username: string, gender: 'MALE' | 'FEMALE') =>
+    authedFetch('/auth/profile', { method: 'POST', body: JSON.stringify({ username, gender }) }).then((r) =>
+      json<Profile>(r),
+    ),
   balance: () => authedFetch('/wallet/balance').then((r) => json<Balance>(r)),
   deposit: (signature: string) =>
     authedFetch('/wallet/deposit', { method: 'POST', body: JSON.stringify({ signature }) }).then((r) =>

@@ -5,6 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Gender } from '@prisma/client';
 import { randomBytes, createHash } from 'crypto';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
@@ -136,6 +137,32 @@ export class AuthService {
       data: { revokedAt: new Date() },
     });
     return this.issueTokens({ sub: session.userId, wallet: session.user.walletAddress });
+  }
+
+  /** Current player profile — used to decide whether to show first-login setup. */
+  async getProfile(userId: string) {
+    return this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { username: true, avatar: true, gender: true, profileComplete: true },
+    });
+  }
+
+  /**
+   * First-login profile setup: choose a username + sex. The avatar sprite is
+   * derived from the chosen sex ('male'/'female'). Username must be unique.
+   */
+  async setProfile(userId: string, username: string, gender: Gender) {
+    const taken = await this.prisma.user.findFirst({
+      where: { username, NOT: { id: userId } },
+      select: { id: true },
+    });
+    if (taken) throw new ConflictException('username taken');
+    const avatar = gender === 'FEMALE' ? 'female' : 'male';
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { username, gender, avatar, profileComplete: true },
+      select: { username: true, avatar: true, gender: true, profileComplete: true },
+    });
   }
 
   /** Server-side invalidation: kill all of a user's sessions. */

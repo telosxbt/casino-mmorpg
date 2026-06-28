@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsIn, IsOptional, IsString, Length, Matches } from 'class-validator';
 
 // base58 Solana address, 32-44 chars.
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -28,4 +28,14 @@ export class RefreshDto {
   @IsString()
   @Length(20, 512)
   refreshToken!: string;
+}
+
+export class ProfileDto {
+  @IsString()
+  @Length(3, 20)
+  @Matches(/^[A-Za-z0-9_]+$/, { message: 'username: letters, numbers, underscore only' })
+  username!: string;
+
+  @IsIn(['MALE', 'FEMALE'], { message: 'gender must be MALE or FEMALE' })
+  gender!: 'MALE' | 'FEMALE';
 }
