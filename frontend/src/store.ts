@@ -35,11 +35,30 @@ export interface Interactable {
   y: number;
 }
 
+export interface Zone {
+  id: string;
+  type: 'ROULETTE' | 'BLACKJACK';
+  label: string;
+  maxSeats: number;
+  rects: [number, number, number, number][];
+}
+
+export interface Lobby {
+  id: string;
+  type: 'ROULETTE' | 'BLACKJACK';
+  name: string;
+  host: string;
+  players: number;
+  max: number;
+  createdAt: number;
+}
+
 export type ActiveModal =
   | null
   | { kind: 'SLOTS'; machine: Interactable }
-  | { kind: 'ROULETTE'; table: Interactable }
-  | { kind: 'BLACKJACK'; table: Interactable }
+  | { kind: 'LOBBY'; zone: Zone }
+  | { kind: 'ROULETTE'; lobbyId: string; name: string }
+  | { kind: 'BLACKJACK'; lobbyId: string; name: string }
   | { kind: 'WALLET' };
 
 interface GameState {
@@ -53,9 +72,19 @@ interface GameState {
   pushChat: (line: ChatLine) => void;
   setChat: (lines: ChatLine[]) => void;
 
-  // The interactable the player is currently standing next to (for the prompt).
+  // Interactable (slot machine) the player is standing next to.
   nearby: Interactable | null;
   setNearby: (i: Interactable | null) => void;
+
+  // Interaction zone (blackjack/roulette area) the player is currently inside.
+  nearbyZone: Zone | null;
+  setNearbyZone: (z: Zone | null) => void;
+
+  // Live lobby list (kept in sync via the lobby socket).
+  lobbies: Record<string, Lobby>;
+  upsertLobby: (l: Lobby) => void;
+  removeLobby: (id: string) => void;
+  setLobbies: (ls: Lobby[]) => void;
 
   modal: ActiveModal;
   openModal: (m: ActiveModal) => void;
@@ -78,6 +107,19 @@ export const useGame = create<GameState>((set) => ({
 
   nearby: null,
   setNearby: (nearby) => set({ nearby }),
+
+  nearbyZone: null,
+  setNearbyZone: (nearbyZone) => set({ nearbyZone }),
+
+  lobbies: {},
+  upsertLobby: (l) => set((s) => ({ lobbies: { ...s.lobbies, [l.id]: l } })),
+  removeLobby: (id) =>
+    set((s) => {
+      const next = { ...s.lobbies };
+      delete next[id];
+      return { lobbies: next };
+    }),
+  setLobbies: (ls) => set({ lobbies: Object.fromEntries(ls.map((l) => [l.id, l])) }),
 
   modal: null,
   openModal: (modal) => set({ modal }),

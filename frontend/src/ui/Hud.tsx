@@ -6,10 +6,11 @@ import { SlotsModal } from './SlotsModal';
 import { RouletteModal } from './RouletteModal';
 import { BlackjackModal } from './BlackjackModal';
 import { WalletModal } from './WalletModal';
+import { LobbyBrowser } from './LobbyBrowser';
 
 /** Top bar (balance + wallet), chat, the "play" prompt, and the modal router. */
 export function Hud() {
-  const { balance, decimals, nearby, modal, openModal, closeModal, toast } = useGame();
+  const { balance, decimals, nearby, nearbyZone, modal, openModal, closeModal, toast } = useGame();
   const clear = useSession((s) => s.clear);
 
   return (
@@ -26,20 +27,14 @@ export function Hud() {
         </button>
       </div>
 
-      {nearby && !modal && (
-        <button
-          style={prompt}
-          onClick={() =>
-            openModal(
-              nearby.type === 'SLOTS'
-                ? { kind: 'SLOTS', machine: nearby }
-                : nearby.type === 'ROULETTE'
-                  ? { kind: 'ROULETTE', table: nearby }
-                  : { kind: 'BLACKJACK', table: nearby },
-            )
-          }
-        >
+      {!modal && nearby && (
+        <button style={prompt} onClick={() => openModal({ kind: 'SLOTS', machine: nearby })}>
           ▶ Play {nearby.label}
+        </button>
+      )}
+      {!modal && !nearby && nearbyZone && (
+        <button style={prompt} onClick={() => openModal({ kind: 'LOBBY', zone: nearbyZone })}>
+          ▶ {nearbyZone.label} — browse tables
         </button>
       )}
 
@@ -48,8 +43,15 @@ export function Hud() {
       {toast && <div style={toastStyle}>{toast}</div>}
 
       {modal?.kind === 'SLOTS' && <SlotsModal machine={modal.machine} onClose={closeModal} />}
-      {modal?.kind === 'ROULETTE' && <RouletteModal table={modal.table} onClose={closeModal} />}
-      {modal?.kind === 'BLACKJACK' && <BlackjackModal table={modal.table} onClose={closeModal} />}
+      {modal?.kind === 'LOBBY' && (
+        <LobbyBrowser
+          zone={modal.zone}
+          onClose={closeModal}
+          onEnter={(lobbyId, name) => openModal({ kind: modal.zone.type, lobbyId, name })}
+        />
+      )}
+      {modal?.kind === 'ROULETTE' && <RouletteModal lobbyId={modal.lobbyId} name={modal.name} onClose={closeModal} />}
+      {modal?.kind === 'BLACKJACK' && <BlackjackModal lobbyId={modal.lobbyId} name={modal.name} onClose={closeModal} />}
       {modal?.kind === 'WALLET' && <WalletModal onClose={closeModal} />}
     </>
   );

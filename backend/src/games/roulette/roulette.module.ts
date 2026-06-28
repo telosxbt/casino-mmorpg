@@ -6,5 +6,6 @@ import { RouletteGateway } from './roulette.gateway';
 @Module({
   imports: [JwtModule.register({})],
   providers: [RouletteService, RouletteGateway],
+  exports: [RouletteService],
 })
 export class RouletteModule {}

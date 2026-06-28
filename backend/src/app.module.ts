@@ -10,6 +10,7 @@ import { ChatModule } from './chat/chat.module';
 import { SlotsModule } from './games/slots/slots.module';
 import { RouletteModule } from './games/roulette/roulette.module';
 import { BlackjackModule } from './games/blackjack/blackjack.module';
+import { LobbyModule } from './lobby/lobby.module';
 import { configValidationSchema } from './common/config.validation';
 import { HealthController } from './common/health.controller';
 import { FairnessController } from './fairness/fairness.controller';
@@ -30,6 +31,7 @@ import { FairnessController } from './fairness/fairness.controller';
     SlotsModule,
     RouletteModule,
     BlackjackModule,
+    LobbyModule,
   ],
   controllers: [HealthController, FairnessController],
 })

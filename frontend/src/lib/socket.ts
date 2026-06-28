@@ -4,7 +4,7 @@ import { io, Socket } from 'socket.io-client';
 
 const URL = import.meta.env.VITE_SOCKET_URL as string;
 
-export type Namespace = 'world' | 'chat' | 'roulette' | 'blackjack';
+export type Namespace = 'world' | 'chat' | 'roulette' | 'blackjack' | 'lobby';
 
 const sockets = new Map<Namespace, Socket>();
 

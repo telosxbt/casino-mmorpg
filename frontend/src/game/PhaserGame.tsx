@@ -4,11 +4,12 @@ import { renderMvMap } from '../lib/mvMap';
 import { WorldScene } from './WorldScene';
 import { connect } from '../lib/socket';
 import { api, setTokens } from '../lib/api';
-import { useGame, useSession, type Interactable } from '../store';
+import { useGame, useSession, type Interactable, type Zone } from '../store';
 
 interface CasinoJson {
   spawn: { x: number; y: number };
   interactables: Interactable[];
+  zones: Zone[];
   assets: {
     mapData: string;
     tilesets: string;
@@ -45,6 +46,7 @@ export function PhaserGame() {
 
       const world = connect('world', tokens.accessToken);
       const chat = connect('chat', tokens.accessToken);
+      const lobby = connect('lobby', tokens.accessToken);
 
       const scene = new WorldScene();
       game = new Phaser.Game({
@@ -63,10 +65,16 @@ export function PhaserGame() {
         charUrl: casino.assets.characters,
         spawn: casino.spawn,
         interactables: casino.interactables,
+        zones: casino.zones ?? [],
         selfId: tokens.user,
         onMoveTo: (tile: { x: number; y: number }) => world.emit('move', tile),
         onNear: (i: Interactable | null) => useGame.getState().setNearby(i),
+        onZone: (z: Zone | null) => useGame.getState().setNearbyZone(z),
       });
+
+      // Live lobby list (create/update/remove fan out to every client).
+      lobby.on('lobby:update', (l: any) => useGame.getState().upsertLobby(l));
+      lobby.on('lobby:removed', (d: any) => useGame.getState().removeLobby(d.id));
 
       // ── World presence + movement ──
       world.on('world:init', (d: any) => {

@@ -41,19 +41,9 @@ for (let y = 0; y < height; y++) {
 
 const passable = (x, y) => x >= 0 && y >= 0 && x < width && y < height && !collision[y * width + x];
 
-// Interactable anchors: the tile the player stands ON to use the object. Placed
-// in front of the real casino furniture in the MV map (verified against the
-// baked render + collision grid): slots line the left hall, blackjack tables sit
-// in the central pit, roulette wheels fill the right-hand gaming hall.
+// Slots stay as individual single-player machines (anchored in front of each
+// cabinet in the left hall, verified against the baked render + collision grid).
 const interactables = [
-  // Roulette — right-hand gaming hall (wheel tables).
-  { id: 'roulette-1', type: 'ROULETTE', label: 'Roulette I', x: 50, y: 13 },
-  { id: 'roulette-2', type: 'ROULETTE', label: 'Roulette II', x: 54, y: 13 },
-  { id: 'roulette-3', type: 'ROULETTE', label: 'Roulette III', x: 50, y: 16 },
-  // Blackjack — central pit (green card tables).
-  { id: 'blackjack-1', type: 'BLACKJACK', label: 'Blackjack I', x: 19, y: 13 },
-  { id: 'blackjack-2', type: 'BLACKJACK', label: 'Blackjack II', x: 34, y: 13 },
-  // Slots — left hall, standing in front of each machine row.
   { id: 'slot-1', type: 'SLOTS', label: 'Lucky 7s', x: 4, y: 7 },
   { id: 'slot-2', type: 'SLOTS', label: 'Mega Fruit', x: 10, y: 7 },
   { id: 'slot-3', type: 'SLOTS', label: 'Gold Rush', x: 4, y: 10 },
@@ -96,6 +86,30 @@ for (const o of interactables) {
 }
 const warnings = interactables.filter((o) => !passable(o.x, o.y)).map((o) => o.id);
 
+// Interaction zones: walking into one opens the lobby browser for that game.
+// Each zone is one or more tile rectangles [x0,y0,x1,y1] (inclusive) covering
+// the real gaming areas of the MV map. Blackjack = central pit (two clusters,
+// split by the entrance hall); Roulette = right-hand gaming hall.
+const zones = [
+  {
+    id: 'blackjack-zone',
+    type: 'BLACKJACK',
+    label: 'Blackjack Pit',
+    maxSeats: 5,
+    rects: [
+      [17, 7, 25, 16],
+      [32, 7, 40, 16],
+    ],
+  },
+  {
+    id: 'roulette-zone',
+    type: 'ROULETTE',
+    label: 'Roulette Hall',
+    maxSeats: 8,
+    rects: [[46, 9, 58, 18]],
+  },
+];
+
 const out = {
   tileWidth: 48,
   tileHeight: 48,
@@ -104,6 +118,7 @@ const out = {
   spawn,
   collision,
   interactables,
+  zones,
   // Asset paths (served from frontend/public) for the in-browser MV renderer.
   assets: {
     mapData: '/assets/map/Map001.json',
@@ -122,7 +137,7 @@ const out = {
 // Backend copy (movement validation) — strip the heavy asset refs it doesn't need.
 writeFileSync(
   resolve(root, 'backend/src/world/data/casino-map.json'),
-  JSON.stringify({ tileWidth: 48, tileHeight: 48, width, height, spawn, collision, interactables }, null, 0),
+  JSON.stringify({ tileWidth: 48, tileHeight: 48, width, height, spawn, collision, interactables, zones }, null, 0),
 );
 // Frontend copy (full, incl. asset paths).
 writeFileSync(resolve(root, 'frontend/public/assets/map/casino.json'), JSON.stringify(out));

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal } from './Modal';
 import { connect } from '../lib/socket';
 import { api } from '../lib/api';
-import { useGame, useSession, type Interactable } from '../store';
+import { useGame, useSession } from '../store';
 import { fromBase, toBase } from '../lib/format';
 
 interface Card { r: number; s: string }
@@ -21,14 +21,13 @@ function CardView({ c }: { c: Card }) {
 }
 const Back = () => <div className="cz-card back" />;
 
-export function BlackjackModal({ table, onClose }: { table: Interactable; onClose: () => void }) {
+export function BlackjackModal({ lobbyId, name, onClose }: { lobbyId: string; name: string; onClose: () => void }) {
   const { decimals } = useGame();
   const token = useSession((s) => s.tokens?.accessToken)!;
   const selfId = useSession((s) => s.tokens?.user)!;
   const [state, setState] = useState('WAITING');
   const [bettingEndsAt, setBettingEndsAt] = useState(0);
   const [bet, setBet] = useState(100);
-  const [full, setFull] = useState(false);
   const [dealer, setDealer] = useState<Card[]>([]);
   const [dealerUp, setDealerUp] = useState<Card | null>(null);
   const [seats, setSeats] = useState<any[]>([]);
@@ -38,8 +37,7 @@ export function BlackjackModal({ table, onClose }: { table: Interactable; onClos
 
   useEffect(() => {
     const s = connect('blackjack', token);
-    s.emit('blackjack:join', { tableId: table.id });
-    s.on('blackjack:full', () => setFull(true));
+    s.emit('blackjack:join', { lobbyId });
     s.on('blackjack:error', (d: any) => setErr(d.reason));
     s.on('blackjack:state', (d: any) => {
       setState(d.state); setBettingEndsAt(d.bettingEndsAt); setDealer([]); setDealerUp(null);
@@ -55,33 +53,23 @@ export function BlackjackModal({ table, onClose }: { table: Interactable; onClos
     });
     return () => {
       s.emit('blackjack:leave');
-      ['blackjack:full','blackjack:error','blackjack:state','blackjack:deal','blackjack:hand','blackjack:turn','blackjack:dealer','blackjack:result'].forEach((e) => s.off(e));
+      connect('lobby', token).emit('lobby:leave', { id: lobbyId });
+      ['blackjack:error','blackjack:state','blackjack:deal','blackjack:hand','blackjack:turn','blackjack:dealer','blackjack:result'].forEach((e) => s.off(e));
     };
-  }, [table.id, token]);
+  }, [lobbyId, token]);
 
   const myTurn = turnUser === selfId;
   const me = seats.find((x) => x.userId === selfId);
   const others = seats.filter((x) => x.userId !== selfId);
-  const act = (action: string) => connect('blackjack', token).emit('blackjack:action', { tableId: table.id, action });
-  const placeBet = () => { setErr(null); connect('blackjack', token).emit('blackjack:bet', { tableId: table.id, amount: toBase(String(bet), decimals).toString() }); };
+  const act = (action: string) => connect('blackjack', token).emit('blackjack:action', { lobbyId, action });
+  const placeBet = () => { setErr(null); connect('blackjack', token).emit('blackjack:bet', { lobbyId, amount: toBase(String(bet), decimals).toString() }); };
   const dealerValue = dealer.length ? handVal(dealer) : dealerUp ? handVal([dealerUp]) : 0;
   const myResult = results?.find((r) => r.userId === selfId);
-
-  if (full) {
-    return (
-      <Modal title="Blackjack" onClose={onClose}>
-        <div className="cz-felt" style={{ textAlign: 'center', padding: 28 }}>
-          <div className="cz-win" style={{ color: '#ff8a8a' }}>TABLE FULL</div>
-          <div style={{ color: '#cdebd6', marginTop: 8 }}>Try the other blackjack table.</div>
-        </div>
-      </Modal>
-    );
-  }
 
   const countdown = state === 'WAITING' ? Math.max(0, Math.round((bettingEndsAt - Date.now()) / 1000)) : 0;
 
   return (
-    <Modal title="Blackjack" onClose={onClose} width={560}>
+    <Modal title={`🃏 ${name}`} onClose={onClose} width={560}>
       <div className="cz-felt">
         {/* Dealer */}
         <div className="cz-row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>

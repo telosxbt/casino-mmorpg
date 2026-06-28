@@ -1,5 +1,4 @@
 import {
-  OnGatewayDisconnect,
   OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
@@ -14,8 +13,10 @@ import { MapService } from '../../world/map.service';
 import { WorldService } from '../../world/world.service';
 import { BlackjackService } from './blackjack.service';
 
+const members = (id: string) => `lobby:p:${id}`;
+
 @WebSocketGateway({ namespace: '/blackjack' })
-export class BlackjackGateway implements OnGatewayInit, OnGatewayDisconnect {
+export class BlackjackGateway implements OnGatewayInit {
   @WebSocketServer() server!: Server;
 
   constructor(
@@ -33,34 +34,32 @@ export class BlackjackGateway implements OnGatewayInit, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('blackjack:join')
-  async onJoin(socket: Socket, body: { tableId: string }) {
+  async onJoin(socket: Socket, body: { lobbyId: string }) {
     const userId = socket.data.user?.sub as string | undefined;
-    if (!userId) return;
-    const table = this.map.interactable(body?.tableId);
-    if (!table || table.type !== 'BLACKJACK') return socket.emit('blackjack:error', { reason: 'unknown table' });
-
+    if (!userId || !body?.lobbyId) return;
     const me = this.world.get(userId);
-    if (!me || !this.map.isNear({ x: Math.round(me.x), y: Math.round(me.y) }, table, 2)) {
-      return socket.emit('blackjack:error', { reason: 'walk up to the table first' });
+    if (!me || !this.map.inZone({ x: Math.round(me.x), y: Math.round(me.y) }, 'BLACKJACK')) {
+      return socket.emit('blackjack:error', { reason: 'enter the blackjack area first' });
     }
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
-    const res = await this.blackjack.join(body.tableId, userId, user?.username ?? 'player');
-    if (res === 'full') return socket.emit('blackjack:full', { tableId: body.tableId });
-
-    socket.data.tableId = body.tableId;
-    await socket.join(`blackjack:${body.tableId}`);
-    socket.emit('blackjack:joined', { tableId: body.tableId });
+    if ((await this.redis.client.sismember(members(body.lobbyId), userId)) !== 1) {
+      return socket.emit('blackjack:error', { reason: 'join the lobby first' });
+    }
+    this.blackjack.ensureRunning(body.lobbyId); // idempotent safety net
+    socket.data.lobbyId = body.lobbyId;
+    await socket.join(`blackjack:${body.lobbyId}`);
+    socket.emit('blackjack:joined', { lobbyId: body.lobbyId });
   }
 
   @SubscribeMessage('blackjack:bet')
-  async onBet(socket: Socket, body: { tableId: string; amount: string }) {
+  async onBet(socket: Socket, body: { lobbyId: string; amount: string }) {
     const userId = socket.data.user?.sub as string | undefined;
     if (!userId) return;
     if (!/^[1-9][0-9]{0,30}$/.test(body?.amount ?? '')) return socket.emit('blackjack:error', { reason: 'invalid amount' });
     if (!(await this.redis.allow(`bj:bet:${userId}`, 10, 10))) return socket.emit('blackjack:error', { reason: 'slow down' });
+    if ((await this.redis.client.sismember(members(body.lobbyId), userId)) !== 1) return socket.emit('blackjack:error', { reason: 'join the lobby first' });
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
     try {
-      await this.blackjack.placeBet(body.tableId, userId, user?.username ?? 'player', BigInt(body.amount));
+      await this.blackjack.placeBet(body.lobbyId, userId, user?.username ?? 'player', BigInt(body.amount));
       socket.emit('blackjack:bet:ok', {});
     } catch (e) {
       socket.emit('blackjack:error', { reason: (e as Error).message });
@@ -68,13 +67,13 @@ export class BlackjackGateway implements OnGatewayInit, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('blackjack:action')
-  async onAction(socket: Socket, body: { tableId: string; action: 'hit' | 'stand' | 'double' }) {
+  async onAction(socket: Socket, body: { lobbyId: string; action: 'hit' | 'stand' | 'double' }) {
     const userId = socket.data.user?.sub as string | undefined;
     if (!userId) return;
     try {
-      if (body.action === 'hit') await this.blackjack.hit(body.tableId, userId);
-      else if (body.action === 'stand') await this.blackjack.stand(body.tableId, userId);
-      else if (body.action === 'double') await this.blackjack.double(body.tableId, userId);
+      if (body.action === 'hit') await this.blackjack.hit(body.lobbyId, userId);
+      else if (body.action === 'stand') await this.blackjack.stand(body.lobbyId, userId);
+      else if (body.action === 'double') await this.blackjack.double(body.lobbyId, userId);
       else socket.emit('blackjack:error', { reason: 'unknown action' });
     } catch (e) {
       socket.emit('blackjack:error', { reason: (e as Error).message });
@@ -83,19 +82,8 @@ export class BlackjackGateway implements OnGatewayInit, OnGatewayDisconnect {
 
   @SubscribeMessage('blackjack:leave')
   async onLeave(socket: Socket) {
-    this.releaseMember(socket);
-  }
-
-  handleDisconnect(socket: Socket) {
-    this.releaseMember(socket);
-  }
-
-  private releaseMember(socket: Socket) {
-    const userId = socket.data.user?.sub as string | undefined;
-    const tableId = socket.data.tableId as string | undefined;
-    if (!userId || !tableId) return;
-    this.blackjack.leave(tableId, userId);
-    void socket.leave(`blackjack:${tableId}`);
-    socket.data.tableId = undefined;
+    const lobbyId = socket.data.lobbyId as string | undefined;
+    if (lobbyId) await socket.leave(`blackjack:${lobbyId}`);
+    socket.data.lobbyId = undefined;
   }
 }

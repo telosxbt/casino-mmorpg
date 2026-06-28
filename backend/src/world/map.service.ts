@@ -9,6 +9,16 @@ export interface Interactable {
   y: number;
 }
 
+export type GameZoneType = 'ROULETTE' | 'BLACKJACK';
+
+export interface Zone {
+  id: string;
+  type: GameZoneType;
+  label: string;
+  maxSeats: number;
+  rects: [number, number, number, number][]; // [x0,y0,x1,y1] inclusive
+}
+
 /**
  * Authoritative map model used for anti-cheat: bounds, collision, pathfinding,
  * and interactable lookups. Loaded from the shared casino-map.json that the
@@ -20,7 +30,25 @@ export class MapService {
   readonly height = map.height;
   readonly spawn = map.spawn as { x: number; y: number };
   readonly interactables = map.interactables as Interactable[];
+  readonly zones = (((map as unknown as { zones?: unknown }).zones ?? []) as Zone[]);
   private readonly collision = map.collision as number[];
+
+  zone(id: string): Zone | undefined {
+    return this.zones.find((z) => z.id === id);
+  }
+
+  /** The interaction zone containing this tile, if any. */
+  zoneAt(x: number, y: number): Zone | undefined {
+    return this.zones.find((z) =>
+      z.rects.some(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1),
+    );
+  }
+
+  /** True if `tile` is inside a zone of the given type. */
+  inZone(tile: { x: number; y: number }, type: GameZoneType): boolean {
+    const z = this.zoneAt(tile.x, tile.y);
+    return !!z && z.type === type;
+  }
 
   passable(x: number, y: number): boolean {
     if (x < 0 || y < 0 || x >= this.width || y >= this.height) return false;

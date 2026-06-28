@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { MvMap } from '../lib/mvMap';
-import type { Interactable } from '../store';
+import type { Interactable, Zone } from '../store';
 
 const TILE = 48;
 
@@ -9,9 +9,11 @@ export interface WorldSceneData {
   charUrl: string;
   spawn: { x: number; y: number };
   interactables: Interactable[];
+  zones: Zone[];
   selfId: string;
   onMoveTo: (tile: { x: number; y: number }) => void;
   onNear: (i: Interactable | null) => void;
+  onZone: (z: Zone | null) => void;
 }
 
 interface PlayerObj {
@@ -44,6 +46,7 @@ export class WorldScene extends Phaser.Scene {
   private cfg!: WorldSceneData;
   private players = new Map<string, PlayerObj>();
   private lastNearId: string | null = null;
+  private lastZoneId: string | null = null;
 
   constructor() {
     super('World');
@@ -73,6 +76,23 @@ export class WorldScene extends Phaser.Scene {
         .text(px, py - 22, o.label, { fontSize: '11px', color: '#fff', backgroundColor: '#0008' })
         .setOrigin(0.5)
         .setDepth(1);
+    }
+
+    // Interaction zones: subtle tint + label over each gaming area.
+    for (const z of this.cfg.zones) {
+      const tint = z.type === 'ROULETTE' ? 0xe04b4b : 0x4be07a;
+      for (const [x0, y0, x1, y1] of z.rects) {
+        this.add
+          .rectangle(x0 * TILE, y0 * TILE, (x1 - x0 + 1) * TILE, (y1 - y0 + 1) * TILE, tint, 0.1)
+          .setOrigin(0)
+          .setDepth(2)
+          .setStrokeStyle(2, tint, 0.5);
+      }
+      const [rx0, ry0, rx1] = z.rects[0];
+      this.add
+        .text(((rx0 + rx1) / 2) * TILE, ry0 * TILE - 4, z.label, { fontSize: '13px', color: '#fff', backgroundColor: '#000a', padding: { x: 6, y: 3 } })
+        .setOrigin(0.5, 1)
+        .setDepth(3);
     }
 
     // Over-layer (tall furniture) drawn above players.
@@ -180,12 +200,13 @@ export class WorldScene extends Phaser.Scene {
     this.checkNearby();
   }
 
-  /** Tell React which interactable (if any) the local player is standing by. */
+  /** Report the slot machine (if any) and the gaming zone the player is in. */
   private checkNearby() {
     const me = this.players.get(this.cfg.selfId);
     if (!me) return;
     const mx = Math.round((me.container.x - TILE / 2) / TILE);
     const my = Math.round((me.container.y - TILE / 2) / TILE);
+
     let near: Interactable | null = null;
     for (const o of this.cfg.interactables) {
       if (Math.abs(o.x - mx) <= 1 && Math.abs(o.y - my) <= 1) {
@@ -197,6 +218,19 @@ export class WorldScene extends Phaser.Scene {
     if (id !== this.lastNearId) {
       this.lastNearId = id;
       this.cfg.onNear(near);
+    }
+
+    let zone: Zone | null = null;
+    for (const z of this.cfg.zones) {
+      if (z.rects.some(([x0, y0, x1, y1]) => mx >= x0 && mx <= x1 && my >= y0 && my <= y1)) {
+        zone = z;
+        break;
+      }
+    }
+    const zid = zone?.id ?? null;
+    if (zid !== this.lastZoneId) {
+      this.lastZoneId = zid;
+      this.cfg.onZone(zone);
     }
   }
 }

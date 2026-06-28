@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal } from './Modal';
 import { connect } from '../lib/socket';
 import { api } from '../lib/api';
-import { useGame, useSession, type Interactable } from '../store';
+import { useGame, useSession } from '../store';
 import { fromBase, toBase } from '../lib/format';
 
 type Phase = 'BETTING' | 'SPINNING' | 'SETTLED';
@@ -13,13 +13,12 @@ const CHIPS: { v: number; c: string }[] = [
   { v: 500, c: '#2faa5a' }, { v: 1000, c: '#7a4fd2' }, { v: 5000, c: '#caa23a' },
 ];
 
-export function RouletteModal({ table, onClose }: { table: Interactable; onClose: () => void }) {
+export function RouletteModal({ lobbyId, name, onClose }: { lobbyId: string; name: string; onClose: () => void }) {
   const { decimals, balance } = useGame();
   const token = useSession((s) => s.tokens?.accessToken)!;
   const [phase, setPhase] = useState<Phase>('BETTING');
   const [countdown, setCountdown] = useState(0);
   const [seats, setSeats] = useState(0);
-  const [full, setFull] = useState(false);
   const [chip, setChip] = useState(100);
   const [staked, setStaked] = useState(0);
   const [last, setLast] = useState<{ result: number; color: string } | null>(null);
@@ -28,10 +27,8 @@ export function RouletteModal({ table, onClose }: { table: Interactable; onClose
 
   useEffect(() => {
     const s = connect('roulette', token);
-    s.emit('roulette:join', { tableId: table.id });
-    s.on('roulette:full', () => setFull(true));
+    s.emit('roulette:join', { lobbyId });
     s.on('roulette:joined', (d: any) => setSeats(d.seats));
-    s.on('roulette:seats', (d: any) => setSeats(d.seats));
     s.on('roulette:error', (d: any) => setErr(d.reason));
     s.on('roulette:state', (d: any) => {
       setPhase('BETTING'); setStaked(0); setLast(null); setFairness(null); setErr(null);
@@ -44,9 +41,10 @@ export function RouletteModal({ table, onClose }: { table: Interactable; onClose
     });
     return () => {
       s.emit('roulette:leave');
-      ['roulette:full','roulette:joined','roulette:seats','roulette:error','roulette:state','roulette:spin','roulette:result'].forEach((e) => s.off(e));
+      connect('lobby', token).emit('lobby:leave', { id: lobbyId });
+      ['roulette:joined','roulette:error','roulette:state','roulette:spin','roulette:result'].forEach((e) => s.off(e));
     };
-  }, [table.id, token]);
+  }, [lobbyId, token]);
 
   useEffect(() => {
     if (phase !== 'BETTING' || countdown <= 0) return;
@@ -57,25 +55,14 @@ export function RouletteModal({ table, onClose }: { table: Interactable; onClose
   function place(type: string, selection: object = {}) {
     if (phase !== 'BETTING') return;
     setErr(null);
-    connect('roulette', token).emit('roulette:bet', { tableId: table.id, type, selection, amount: toBase(String(chip), decimals).toString() });
+    connect('roulette', token).emit('roulette:bet', { lobbyId, type, selection, amount: toBase(String(chip), decimals).toString() });
     setStaked((s) => s + chip);
-  }
-
-  if (full) {
-    return (
-      <Modal title="Roulette" onClose={onClose}>
-        <div className="cz-felt" style={{ textAlign: 'center', padding: 28 }}>
-          <div className="cz-win" style={{ color: '#ff8a8a' }}>TABLE FULL</div>
-          <div style={{ color: '#cdebd6', marginTop: 8 }}>Try another roulette table.</div>
-        </div>
-      </Modal>
-    );
   }
 
   const cols = Array.from({ length: 12 }, (_, i) => i + 1);
 
   return (
-    <Modal title="Roulette" onClose={onClose} width={680}>
+    <Modal title={`🎡 ${name}`} onClose={onClose} width={680}>
       <div className="cz-row" style={{ alignItems: 'stretch', gap: 14 }}>
         <div className={`cz-wheel ${phase === 'SPINNING' ? 'spin' : ''}`}>
           <div className="cz-wheel-hub" />
