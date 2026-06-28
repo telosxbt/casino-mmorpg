@@ -1,4 +1,4 @@
-import { IsString, Length, Matches } from 'class-validator';
+import { IsOptional, IsString, Length, Matches } from 'class-validator';
 
 // base58 Solana address, 32-44 chars.
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -18,6 +18,7 @@ export class VerifyDto {
   signature!: string;
 
   // Optional desired username on first login.
+  @IsOptional()
   @IsString()
   @Length(3, 20)
   username?: string;

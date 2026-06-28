@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
 import { MapService } from './map.service';
 import { WorldService } from './world.service';
 import { WorldGateway } from './world.gateway';
@@ -9,6 +10,7 @@ import { WorldGateway } from './world.gateway';
  */
 @Global()
 @Module({
+  imports: [JwtModule.register({})],
   providers: [MapService, WorldService, WorldGateway],
   exports: [MapService, WorldService],
 })
